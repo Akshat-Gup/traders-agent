@@ -1,25 +1,24 @@
 const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
+const http = require("node:http");
 const { spawn } = require("node:child_process");
 
 const BACKEND_PORT = process.env.BACKEND_PORT || "8765";
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
 let backendProcess = null;
+let backendLog = "";
 
 function detectPython() {
-  const repoRoot = __dirname ? path.resolve(__dirname, "..") : process.cwd();
+  const repoRoot = path.resolve(__dirname, "..");
   const venvPython = path.join(repoRoot, ".venv", "bin", "python3");
-  if (fs.existsSync(venvPython)) {
-    return venvPython;
-  }
+  if (fs.existsSync(venvPython)) return venvPython;
+  // also try python3.14 or python3
   return "python3";
 }
 
 function startBackend() {
-  if (backendProcess) {
-    return;
-  }
+  if (backendProcess) return;
 
   const repoRoot = path.resolve(__dirname, "..");
   const python = detectPython();
@@ -30,12 +29,58 @@ function startBackend() {
     {
       cwd: repoRoot,
       env: { ...process.env, PYTHONUNBUFFERED: "1" },
-      stdio: "inherit"
+      stdio: ["ignore", "pipe", "pipe"]
     }
   );
 
-  backendProcess.on("exit", () => {
+  backendProcess.stdout?.on("data", (chunk) => {
+    const text = chunk.toString();
+    backendLog += text;
+    if (backendLog.length > 20000) {
+      backendLog = backendLog.slice(-20000);
+    }
+  });
+
+  backendProcess.stderr?.on("data", (chunk) => {
+    const text = chunk.toString();
+    backendLog += text;
+    if (backendLog.length > 20000) {
+      backendLog = backendLog.slice(-20000);
+    }
+  });
+
+  backendProcess.on("exit", (code) => {
+    console.log("[backend] exited with code", code);
     backendProcess = null;
+  });
+}
+
+/** Poll /health until the backend answers, then resolve. */
+function waitForBackend(timeoutMs = 15000) {
+  return new Promise((resolve, reject) => {
+    const deadline = Date.now() + timeoutMs;
+
+    function poll() {
+      const req = http.get(`${BACKEND_URL}/health`, (res) => {
+        if (res.statusCode === 200) {
+          resolve();
+        } else {
+          retry();
+        }
+      });
+      req.on("error", retry);
+      req.setTimeout(500, () => { req.destroy(); retry(); });
+    }
+
+    function retry() {
+      if (Date.now() > deadline) {
+        reject(new Error("Backend did not start in time"));
+        return;
+      }
+      setTimeout(poll, 300);
+    }
+
+    poll();
   });
 }
 
@@ -43,9 +88,9 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 1500,
     height: 980,
-    minWidth: 1180,
-    minHeight: 820,
-    backgroundColor: "#0b1116",
+    minWidth: 1100,
+    minHeight: 780,
+    backgroundColor: "#f5f4f1",
     titleBarStyle: "hiddenInset",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
@@ -57,15 +102,26 @@ function createWindow() {
   const devUrl = process.env.VITE_DEV_SERVER_URL;
   if (devUrl) {
     win.loadURL(devUrl);
-    win.webContents.openDevTools({ mode: "detach" });
+    win.once("ready-to-show", () => {
+      win.show();
+      win.focus();
+    });
+    // Only open devtools if explicitly requested
+    if (process.env.DEVTOOLS === "1") {
+      win.webContents.openDevTools({ mode: "detach" });
+    }
   } else {
     win.loadFile(path.join(__dirname, "..", "dist", "index.html"));
   }
 }
 
-app.whenReady().then(() => {
-  startBackend();
+app.whenReady().then(async () => {
+  // In dev, backend is already running via run_backend.sh
+  if (!process.env.VITE_DEV_SERVER_URL) {
+    startBackend();
+  }
 
+  // Register IPC handlers immediately (don't need backend for these)
   ipcMain.handle("dialog:pickPaths", async (_, options = {}) => {
     const properties = [];
     if (options.mode === "folders") {
@@ -87,24 +143,27 @@ app.whenReady().then(() => {
 
   ipcMain.handle("desktop:getBackendUrl", async () => BACKEND_URL);
   ipcMain.handle("desktop:openPath", async (_, targetPath) => shell.openPath(targetPath));
+  ipcMain.handle("desktop:getBackendLog", async () => backendLog);
+
+  // Wait for backend to be ready before showing the window
+  try {
+    await waitForBackend(20000);
+    console.log("[electron] backend ready");
+  } catch (e) {
+    console.error("[electron] backend failed to start:", e.message);
+  }
 
   createWindow();
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
+  if (process.platform !== "darwin") app.quit();
 });
 
 app.on("before-quit", () => {
-  if (backendProcess) {
-    backendProcess.kill();
-  }
+  if (backendProcess) backendProcess.kill();
 });

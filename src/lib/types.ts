@@ -14,9 +14,6 @@ export interface TemplateRecord {
 export interface ProjectRecord {
   id: string;
   name: string;
-  objective: string;
-  audience: string;
-  family: string;
   root_path: string;
   created_at: string;
 }
@@ -48,6 +45,18 @@ export interface JobRecord {
   template_id?: string | null;
   cadence?: string | null;
   question_log?: { role: string; content: string; timestamp: string }[];
+}
+
+export interface IntakeOption {
+  id: string;
+  label: string;
+}
+
+export interface IntakeQuestion {
+  id: string;
+  text: string;
+  multi: boolean;
+  options: IntakeOption[];
 }
 
 export interface AppState {

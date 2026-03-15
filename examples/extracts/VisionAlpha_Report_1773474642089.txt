@@ -1,0 +1,340 @@
+=== PAGE 1 ===
+Morgan Stanley I RESEARCH
+March 5, 2026 11:32 AM GMT
+Broadcom Inc. I North America
+Al Momentum Builds; Visibility
+and Margins Improve
+WHAT'S CHANGED
+Broadcom Inc. (AVGO.O)
+Price Target
+From
+$462.00
+To
+$470.00
+Reaction to earnings
+Strengthens our thesis
+Impact to our thesis
++ Modest upside
+† Meaningful revision higher
+Financial results versus consensus
+Direction of next 12-month
+consensus EPS
+Source: Company data, Morgan Stanlay Rascarch
+The quarter was strong, with Al driving upside and improved
+Long-term visibility. Margin concerns eased, networking
+outperformed, and FY2T Al potential remains significant. We see
+further upside as ASIC programs scale and remain confident in
+the durability of the Al growth trajectory...
+Key Takeaways
+• FY27 Al chip guide >$100B with ~10GW capacity, upside possible as ASICs scale
+and networking outperforms
+• Rack margin concerns eased; semi margins stronger than expected
+• Constructive CoT commentary, we continue to expect majority share in TPU
+ecosystem
+• Remain OW; raising PT to $470 on higher estimates and sustained Al momentum
+Overall, these were very strong results, with upside driven squarely by Al and
+with management providing more long-term visibility. The company guided to
+over $100bn of Al chip revenue in FY27 (including both XPUs and Al networking),
+and we see material upside to that number based on the underlying gigawatt math.
+Management now sees just shy of 10GW of compute capacity in FY27. Using a rough
+~520bn per GW framework gets to very large revenue numbers, though it was clear
+that content per GW varies meaningfully by customer. We would view that math as
+closer to a bull case, but it underscores the magnitude of the opportunity. We are
+currently modeling ~$120bn of Al revenue in FY27 and see potential for upward
+revisions as ASIC programs scale and Al networking continues to exceed
+expectations.
+We also took comfort from two of the primary debates heading into the print:
+Gross Margins: There had been an overhang around how to model rack margins,
+and we assumed something in the mid-40% gross margin range. It now appears to
+be far less of a concern. Management was explicit that gross margins will not be
+diluted by racks. We aren't clear if this is because it is no longer selling rack form
+IDEA
+MORGAN STANLEY & CO. LLO
+Joseph Moore
+Bouty Aralyst
+Joaapn.Moors@morganacariay.com
+Ella Tulchinsky
+Rascarch Associate
+Ela.Tulchiraky@morganacarlay.com
+Mason Wayne
+Rassarch Aaaoclate
+Mason.Wayna@morgarstanlay.com
+Shane Brett
+Eguty Aralyst
+Shana Bratt@margarstanley.com
+Nicole Kozhukhov
+Rassarch Associate
+Nicola.Kathukhov@marpanacarlay.com
++1 212761-7516
++1 212 761-2222
++1 212 761-6012
++1 212 761-1022
+Broadcom Inc. (AVGO.0, AVGO US)
+Semiconductors | United States of America
+Stock Rating
+Industry View
+Price target
+Shr price, close (Mar 4, 2026)
+Mkt cap, curr (mm)
+52-Week Range
+Fiscal Year Ending
+ModelWare EPS ($)
+P/E
+EPS (S)**
+EPS (S)S
+Div yid (%)
+Overweight
+Attractive
+$470.00
+$317.53
+$1,552,087
+$414.61-138.10
+10/25 10/26e 10/27e 10/28e
+5.39
+68.6
+9.90
+15.99
+20.57
+32.1
+19.9
+6.82 11.69
+17.98
+15.4
+22.71
+6.67 10.15
+14.18
+17.58
+0.7
+0.8
+0.9
+0.9
+Unless otherwise noted, all matrics are baaed on Morgan Stanley ModelWare
+framework
+** - Eased on consansus mathodology
+§ - Consansus data la provided by Rafinitiv Estimatas
+• - Morgan Stanley Rascarch estimatas
+QUARTERLY EPS (S)
+2027e
+Quarter
+Q1
+02
+03
+Q4
+2025
+1.60
+1.58
+1.69
+1.95
+Prior Current
+- 2.0ба
+218
+2.40
+3.10
+3.38
+3.43
+3.81
+3.26
+3.36
+3.65
+3.95
+a - Morgan Stanley Ressarch estimates, a - Actual Company raported data
+3.90
+4.20
+4.68
+5.19
+Morgan Stanley does and seeks to do business with
+companies covered in Morgan Stanley Research. As a result,
+investors should be aware that the firm may have a conflict of
+interest that could affect the objectivity of Morgan Stanley
+Research. Investors should consider Morgan Stanley
+Research as only a single factor in making their investment
+decision.
+For analyst certification and other important disclosures,
+refer to the Disclosure Section, located at the end of this
+
+
+=== PAGE 2 ===
+Morgan Stanley | RESEARCH
+sionAlpha] Only For Internal
+IDEA
+(VisionAlpha] Only Fo
+factors or if there are better-than-expected economics, but the key takeaway is that
+semi margins are holding up better than expected, and we no longer model
+incremental margin pressure from racks. That said, we do still expect some longer-
+term mix pressure at the consolidated level as semis grow faster than software
+(which we now expect to be <20% of revenue by CY27), and as XPU mix rises (given
+pass-through elements Like HBM). Even so, margins are better than feared and
+structurally intact.
+Customer-owned Tooling (CoT): We do not think this debate is settled, but
+management commentary was constructive. While it does not expect 100% share at
+any customer indefinitely, Broadcom does not expect to see meaningful CoT share
+loss for many years. It emphasized the technical challenges hyperscalers face in
+designing competitive silicon and highlighted AVGO's strength in silicon design, high-
+speed SerDes, advanced packaging, and large-scale cluster networking. It is also now
+seeing customers move from one ASIC per year toward multiple product Lines as
+workloads diversify. Engagements remain multi-year and strategic, and we do not
+see significant design-out risk.
+sionAlpA)
+On Al more broadly, both ASIC and networking are performing well, but
+networking has exceeded our expectations and is set to become a larger portion
+of Al revenue next quarter (~40% of Al revenue in F2Q v5. ~33% in F1Q).
+Broadcom's high-capacity switching portfolio and SerDes are clearly differentiating.
+As clusters scale and scale-up bandwidth requirements increase, connectivity
+becomes more central, and Broadcom is well positioned. On CPO, while Broadcom
+pioneered the technology and is shipping into Limited deployments, management
+does not expect high-volume adoption in the near term. Only a couple of
+hyperscalers are using it at meaningful (but still modest) volumes. Reliability
+concerns and limited current TCO benefit mean this is likely more of a 2028 story. Im cra)
+scale-up, customers are expected to remain on direct-attach copper longer than
+many feared - moving to 200G and potentially 400G SerDes before optical
+becomes necessary. On optics generally, it remains a seller's market and should
+remain a tailwind for the foreseeable future.
+Non-Al semiconductors and software remain stable but unexciting. We are not
+seeing signs of a sharp cyclical recovery, but the non-Al semis business appears
+stable. Infrastructure software continues to deliver steady performance, and
+management highlighted how VMW is complementary to Al workloads rather than
+replaceable by them.
+Alpa] Only For Internal Web View, Do Not Share O
+Details on the quarter: Revenue of $19.311bn (up 7.2% q/q and 29.5% y/y), ahead of
+the Street at $19.221bn and our estimate of $19.141bn. On a segment basis,
+Semiconductor Solutions revenue was $12.515bn (up 13.0% q/q and 52.4% y/y) and
+Infrastructure Software was $6.796bn (down 2.1% q/q and up 1.4% y/y). Gross
+margin of 77.0% was in Line with the Street at 77% and our estimate of 76.9%. Non-
+GAAP EPS of $2.05 was ahead of the Street at $2.03 but below our estimate of
+$2.08.
+Changes to estimates: The company guided next quarter revenue to $22bn, ahead
+of the Street at $20.50bn and our estimate of $20.14bn. For FY26, we are modeling
+revenue/non-GAAP GM/EPS of $107.7bn/74.7%/$11.69 vs. our prior $100.3bn/72.7%/
+[VisionAlpha] Only Fo
+[VisionAlpha] Only Fo
+ransfer [VisionAlpha]
+Do Not Share Or
+
+
+=== PAGE 3 ===
+Morgan Stanley | RESEARCH
+sionAlpha] Only For Interna
+IDEA
+(VisionAlpha] Only Fo
+$10.73, and we are raising our estimates for FY27 to $168.3bnbn/71.0%/$17.98 from
+$132.4bnbn/70.4%/$14.22, reflecting the higher confidence in Al growth and better-
+than-expected margins.
+Thoughts on the stock: We previously wrote here that for AVGO to reverse
+underperformance, the most important factors were to clarify any potential margin
+headwinds and giving feasible pushback to the customer-owned tooling risk. We
+think that it did both of those things. On top of that, the commentary about next
+year "well north of $100 bn of Al revenue" vs. our prior estimate of 585 bn - and
+sionAlp]
+gave gigawatt commentary supporting substantially higher numbers.
+So it should be enough to drive the stock higher, and the outlook is pretty positive.
+That said, as revenues grow they will likely be subject to some of the same "big
+numbers" P/E multiple compression that NVIDIA has seen, as we are now dependent
+upon very large capex numbers from AVGO customers in CY27. We Like both AVGO
+and NVDA, though we maintain substantial preference for NVDA given the much
+Lower multiple on Al-related earnings. While our estimates come up, between the
+Larger numbers Limiting post CY27 growth, and multiple compression across the
+group, we are lowering our PT from 35x MW EPS for CY27 to 27x, which brings the
+target up from $462 to $470. Stay OW.
+sionAlp,
+(Vision
+Internal Web View, Do !
+[VisionAlpha] Only For Internal Web View, Do N
+(Visionalpa) Only For internal Web View, Do N
+(VisionAlpha] Only Fo
+are Or Transfer [VisionAlpha]
+MORGAN STANLEY
+RESEARCH
+- Do Not Share Or Transfer [VisionAlpha)
+3
+
+
+=== PAGE 4 ===
+Morgan Stanley | RESEARCH
+IDEA
+Risk Reward - Broadcom Inc. (AVGO.O)
+Overweight on growth in Al, recovery in core semis, and potential VMW upside.
+PRICE TARGET $470.00
+We value AVGO at 27X CY2027e ModelWare EPS of $17.39. This is roughly 24x non-GAAP
+EPS of $19.54, and reflects a slight premium over Al peers that accounts for their outsized Al
+growth potential and long-term prospects in ASICs.
+Consensus Price Target Distribution
+$335.00
+Source: Rafinitiv, Morgan Stanley Research
+$450.30
+•
+MS PT
+$525.00
+• Mean • Morgan Stanley Estimates
+RISK REWARD CHART AND OPTIONS IMPLIED PROBABILITIES (12M)
+OVERWEIGHT THESIS
+• AVGO has the second largest Al exposure
+(in absolute dollars) in our coverage and is
+poised to grow as hyperscale capex
+increases. We see the company maintaining
+their premium multiple as networking and
+ASIC businesses continue to grow.
+• We expect non-Al semis to have a cyclical
+rebound late next year after a period of high
+excess inventory in the networking and
+storage markets.
+• We expect VMware to successfully
+integrate into the portfolio and focus
+operations, cut costs, and drive stable cash
+USD
+$619.00(+94.94%)
+Prob ($619.00)~0.0%
+4--
+600
+5470.00(+48.0214)
+- Prob ($470.00)~9.5%
+450
+S31758
+300
+4..
+$298.00(-6.1596)
+Prob (<298.00)~49.5%
+150
+MAR 25
+SEP '25
+MAR 26
+MAR 27
+Key: — Historical Stock Performance • Current Stock Price • Price Target
+Source: Rafinitiv, Morgan Stanlay Research, Morgan Stanley Institutional Equitias Division. The probabilities of our Bull,
+Basa, and Bear caso scanarios playing out wara estimated with implied volatility data from the options markat as of 4
+Mar 2026. All figures are approximate risk nautral probabilities of the stock reaching bayond the scanario prica in sither
+thras-months' or ona-ysars tima. Viaw axplanation of Options Probabilities mathodology hars
+BULL CASE
+$619.00
+31X 2027e ModelWare Bull EPS of $19.96
+Revenue growth surprises to the upside and
+Al revenues grow from ramp of new xPU
+customers, continued networking strength,
+and VMware synergies. The stock's valuation
+multiple expands as investors gain
+confidence in its Al and M&A strategy.
+BASE CASE
+$470.00
+27X 2027e ModelWare Base EPS of $17.39
+Posts strong revenue growth in CY26 CY27
+driven by strong Al revenues from xPU and
+Networking, and software growth.
+Consensus Rating Distribution
+96% Overweight
+4% Equal-weight
+0% Underweight
+• MS Rating
+Source: Rafinitiv, Morgan Stanley Rossarch
+Risk Reward Themes
+New Data Era:
+Positive
+Pricing Power:
+Positive
+View descriptions of Risk Rawards Thomas here
+BEAR CASE
+$298.00
+20X 2027e ModelWare Bear EPS of $15.02
+evenue growth disappoints and synergi
+derwhelm. New customer engagemer
+fail to reach production The stock's
+valuation multiple falls to 31X
+

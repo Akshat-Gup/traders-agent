@@ -1,0 +1,461 @@
+=== PAGE 1 ===
+UBS
+Global Research
+5 March 2026
+Broadcom Inc.
+Strong Results & Guidance; Raise Estimates,
+Maintain $475 PT
+Summary Thoughts
+Much of the call focused on AVGO's F2027 Al revenue guidance of >$100B, but this is
+really only just in-line with our pre-call model of 5106B and most pre-call investor
+bogeys in a similar range. We think the more incremental commentary for investors was
+actually on margins where AVGO feels it can sustain current margin levels despite the
+previously announced ~ $21B in Anthropic orders (which it had signaled would be racks
+and therefore dilutive to margins). Having spoken to the company, we get the sense that
+the mix of what it plans to ship to Anthropic is still evolving but may now include even
+more high margin networking and potentially a pivot to using an ODM partner for any
+racks that Anthropic still wants (but still almost all TPU). Net, the $100B still seems very
+conservative to us and we are increasing our F2027 Al forecast to >$130B due to two
+factors: 1) our supply chain work now suggesting AVGO's TPU unit shipments may be in
+the range of ~6MM next year, and 2) commentary from management around 2027
+shipments in GW terms (where we think AVGO's revenue per GW is actually in a similar
+range to AMD's ~$15B). The combo of more Al revenue and less dilutive impact to
+margins yields an increase in revs/EPS from ~$121B/$12.67 to ~$130B/$14.70 in
+C2026E, from ~$167B/$18.05 to~$195B/$22.76 in C2027E, and from ~$211B/$22.59
+to ~ $241B/$28.07 in C2028E. Despite these much higher estimates, we are leaving our
+$475 PT unchanged as this now ascribes a ~21x P/E multiple for C2027E and ~ 17x for
+C2028E - numbers which we feel more appropriately discount concerns around the
+sustainability of Al spending levels (which are unlikely to lift in a meaningful way.
+Analysis/Key Highlights
+• FQ1 revenue of $19.3B came in above guidance and slightly above UBSe/Street
+$19.1B/$19.3B. Gross margin of 77.0% was roughly in line with UBSe/Street, and
+operating margin was ~80bps ahead at 66.4%, resulting in EPS of $2.05 - above
+UBSe $1.99/Street $2.03. Al revenue was $200MM above guidance at $8.4B
+driven by Custom ASIC. We estimate Al compute grew 28% Q/Q to $5.63B and Al
+networking 34% Q/Q, to $2.77B
+• FQ2 revenue guided to $22.0B - ahead of UBSe/Street at $20.8B/$20.5B led
+largely by ~ $1.4B of upside to Al revenue guidance - which relative to our model is
+split about evenly between TPU and networking (which is being led by very strong
+demand for Tomahawk 6). Gross margins should be flattish QiQ and
+EBITDA margin was guided to 68%, also flat Q/Q.
+• While we expected AVGO to pivot away from backlog disclosure (which was
+Highlights (U5$m)
+Revenues
+EBIT (UBS)
+Net earning» (UBS)
+EPS (UBS, diluted) (US$)
+DPS (net) (USS)
+Net (debt) / cash
+10/23
+35,819
+22,125
+18,378
+4.22
+1.84
+(25,040)
+Equities
+United States
+Semiconductors
+12-month rating
+Buy
+12m price target
+US$475.00
+Price (04 Mar 2026)
+RIC: AVGO.O BBG: AVGO US
+Trading data and key matrice
+52-wk range
+Market cap.
+Shares o/a
+Free float
+Avg. daily volume ('000)
+Avg. daily value (m)
+Common s/h equity (10/26E)
+P/BV (10/26E)
+Net debt to EBITDA (10/26E)
+US$317.53
+US$412.97-146.29
+US$1,505b
+4,741m (COM)
+100%
+31,038
+US$10,588.1
+US$102b
+14.9x
+0.4x
+EPS (UBS, diluted) (USD)
+Q1
+Q2E
+Q3E
+Q4E
+10/26E
+10/27E
+10/28E
+From
+1.99
+2.18
+2.92
+3.96
+11.05
+16.68
+21.53
+10/26E
+To
+2.05
+2.38
+3.30
+4.41
+12.16
+21.14
+26.83
+% ch
+13
+11
+10
+27
+25
+Cons
+2.03
+2.17
+2.85
+3.32
+10.15
+14.18
+17.58
+Timothy Arcuri
+Analyst
+timothy.arcuri@ubs.com
++1-415-352 5676
+Natalia Winkler, CFA
+natalia.winklen@ubs.com
++1-415-352 4626
+10/24
+51,574
+30,736
+23,733
+4.87
+2.11
+(58,218)
+Profitability/valuation
+10/23
+EBIT (UB5) margin 9
+61.8
+ROIC (EBIT) %
+44.8
+EV/EBITDA (UBS core) x
+13.7
+P/E (UBS, diluted) x
+16.7
+Equity FCF (UBS) yield 96
+6.0
+Dividend yield (net) %
+2.6
+10/24
+59.6
+35.1
+20.5
+28.3
+3.1
+1.5
+price of US 399Y53 on 04-Mer-202
+s, LSEG Eikon, UB5 estimates. Metrics merced as (UB:
+10/25
+63,887
+41,997
+33,728
+6.82
+2.36
+(48,958)
+10/26E
+108,993
+74,976
+60,384
+12.16
+2.60
+(32,659)
+10/25
+65.7
+32.8
+27.6
+36.1
+2.3
+1.0
+10/26E
+68.8
+56.7
+20.2
+26.1
+3.2
+0.8
+10/27E
+182,185
+130,775
+106,813
+21.14
+3.90
+37,135
+10/27E
+71.8
+96.8
+11.6
+15.0
+6.4
+1.2
+ed analyst adjustments applied. Veluations: based on
+10/28E
+229,736
+167,356
+138,258
+26.83
+5.38
+135,103
+Grant Joslin
+Analyst
+grant.joslin@ubs.com
++1-201-352 0442
+10/29E
+294,337
+215,619
+178,963
+34.05
+6.94
+260,509
+10/30E
+367,070
+269,004
+224,005
+41.78
+8.96
+420,723
+10/28E
+10/29E
+72.8
+73.3
+122.9
+154.3
+9.1
+7.1
+11.8
+9.3
+8.8
+11.2
+1.7
+2.2
+10/30E
+73.3
+183.8
+5.7
+7.6
+14.2
+2.8
+everage share price that year, (E): based on a share
+This report has been prepared by UBS Securities LLC. ANALYST CERTIFICATION AND REQUIRED DISCLOSURES, INCLUDING
+INFORMATION ON THE QUANTITATIVE RESEARCH REVIEW PUBLISHED BY UBS, BEGIN ON PAGE 18. UBS does and seeks to do
+business with companies covered in its research reports. As a result, investors should be aware that the firm may have a conflict of
+interest that could affect the objectivity of this report. Investors should consider this report as only a single factor in making their
+investment decision.
+
+
+=== PAGE 2 ===
+misconstrued as revenue by many investors coming off last call and provide
+explicit Al revenue guidance, we thought this would be for F2026 with limited if
+any commentary on F2027. Instead, AVGO is not guiding F2026 and instead
+guiding to >$100B in Al revenue tor F2027 - In-line vith where we believe mos
+investors were pre-call and well aligned w/our Street-high $106B estimate prior to
+the call. Our estimates post call moved closer to $130B and we expect networking
+to account for ~35% of Al revenues or ~$43B and XPU at ~65% of the mix
+reaching ~$85-90B.
+• AVGO is suggesting it could ship close to ~ 10GW in F2027 - which, at its prior
+indication of ~$20B+/GW, would suggest that $100B in Al revenue next vear is tar
+too low. However, AVGO is now backing away from this $20B number and
+suggesting $10-15B is a more reasonable number.
+• The company provided a bit more disclosure around specific customers, the most
+notable of which is Anthropic with AVGO now indicating it will ship ~ 3GW of TPUS
+in F2027 (nominally ~$40B) some of which is covered by the previously disclosed
+$21B order. AVGO had previously given the impression that this $21B would be
+racks rather than just silicon, but it seems that the structure of the deal is changing
+and it appears AVGO now expects lesser rack component vs prior estimates
+AVGO management is no longer suggesting any negative impact from this first
+tranche of Anthropic revenue with gross margin likely to remain in a roughly
+similar range to the present. We sense a higher networking mix and potential rack
+components pricing increases could be the levers offering GM support.
+• In conjunction with our bottom up work on TPU shipments now in the ~6MM
+range for next year, this would make a ~$130B Al revenue number more in the
+right range for F2027 - still quite a bit higher than where AVGO is guiding and
+leaving room for more beats/raises.
+• Beyond the TPU programs with GCP and Anthropic, AVGO sounded bullish on the
+remaining XPU programs suggesting that META MTIA could scale to multi-GW in
+2027 and beyond; programs with 2 unnamed customers under strict NDAs (we
+believe Bytedance and Apple) are shipping this year and expected to more than
+double in 2027 (we expect Apple to ramp in F2H:26) and OpenAl shipments are
+expecting to start in 2027 at >1GW.
+• Seemingly in direct response to our note on its software business, the company
+went after the narrative that agentic Al could push more workload to the cloud by
+accelerating the upgrade of legacy on-prem compute infrastructure and
+suggested that agentic Al will be good for VMWare because enterprises will want
+to keep more sensitive data that would be the foundation for agentic workloads
+on-premises rather than putting this into the cloud. Regardless, ve model growth
+in the software business to decelerate and grow more in the mid single digit %
+range versus VMW currently growing in the low double digits.
+• Another interesting read-through from the call was the commentary on copper
+versus optics. AVGO remains generally skeptical that co-packaged optics (CPO)
+Mll really take off until C2028 at the earliest with AVGO's SerDes performanc
+and reach (2m at 400G) allowing copper to remain the main technology for scale
+up, plus customer concerns about the effort required to replace any CPO failures
+encountered in deployment compared to pluggable optics, as we have written ir
+• FCF came in at $8.0B (41% of revenue) in FQ1, while the company returned ~
+$7.8B in share repurchases and ~$3.1B in dividends. AVGO's board approved a
+$10B share repurchase program effective through CYE26.
+• Recent related research: see linked for our latest deep dives on the TPU/COT
+debate and AVGO's software business.
+Read Across
+We view AVGO's expectations of F2027 XPU revenue ramp across multiple customers as
+a bullish sign on hyperscalers expectations for continued compute - should read
+positively for Al compute names. A strong growth in networking reads positive for Al
+networking players, like MRVL.
+Valuation: PT S475 (unchanged)
+Our PT $475 (unchanged) is based on applying a peer group weighted average multiple
+of ~18x EV/FCF multiple (from prior ~25x) to the CY27E Software FCF contribution of
+Broadcom Inc.
+• 5 March 2026
+#SUBS 2
+
+
+=== PAGE 3 ===
+Broadcom Inc.
+5
+Mar
+ich 2026
+Internal Web Vie
+Only For Internal Web
+$42B (from $33B) and applying a peer group average multiple of
+~27x EV/FCF multiple
+(from prior ~ 30x) to the CY27E Semis FCF contribution of $66B (from $55B).
+Visior
+[VisionAlpha] Only For Internal Web View
+ot Share Ol
+insfer [VisionAlpha]
+eb View, Do Not Share Or Transfer [VisionAlpha]
+[VisionAlpha] Only For Internal Web View
+Not Share Or Transfer (VisionAlpha]
+Neb View, Do Not Share Or Transfer [VisionAlpha]
+[VisionAlpha] Only Fo
+[VisionAlpha] Only For Internal Web View, Do Not Share Or Transfer [VisionAlpha]
+Not sh
+Or Transfer (VisionAlpha]
+(VisionAlpha) Only Fo
+Gow. Do Not Sha
+Or Transfer (VisionAlpha]
+SUBS
+3
+[VisionAlpha) Only Fo
+
+
+=== PAGE 4 ===
+Broadcom Inc.
+Figure 1: UBS TPU unit estimates
+TPU S revs
+AVGO TPU Revs
+GCP
+Anthropic rack
+TPU only
+%nOn-XPU in Anthropic orders
+UBSe Total TPU revs
+UBSE TPU chip revs
+UBSe Al Revs
+TRU Units, K
+AVGO
+Node
+V5
+v5 (Trillium)
+v7 (Ironwood)
+v8ax(Sunfish)
+v9 (Pumafish)
+N5
+N3
+N3
+• N2
+MediaTek
+v8x (Zebrafish)
+N3
+v9x
+AVGO Total
+TPU Total (AVGO+Mediatek)
+Source: UBS estimates
+C2024
+$7,676
+:
+57,676
+$7,676
+$12,982
+C2024
+1,280
+1,280
+1,280
+Broadcom Inc.
+5
+Mar
+ich 2026
+C2025
+$13,204
+513,204
+$13,204
+$24,428
+C2025
+440
+1,160
+110
+1,710
+1,710
+UBS Research
+C2026
+$25,538
+$25,000
+$20,000
+20%
+$50,538
+$45,538
+$82,642
+C2026
+850
+2,920
+300
+300
+4,070
+4,370
+C2027
+$45,838
+$28,000
+$26,500
+5%
+$73,838
+$72,438
+$145,394
+C2027
+3,420
+2,680
+2,000
+6,100
+8,100
+C2028
+$61,338
+$3,000
+$3,000
+0%
+$64,338
+$64,338
+$188,506
+C2028
+4,700
+210
+100
+1,300
+4,910
+6,310
+[VisionAlpha] Only For Internal Web View, Do
+(VisionAlpha) Only Fo
+Or Transfer [VisionAlpha ]
+Gew. Do Not Sha
+Or Transfer [Vision Alpha ]
+#UBS
+4
+

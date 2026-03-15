@@ -1,8 +1,50 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { type ReactNode, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowLeft,
+  BarChart3,
+  BookOpen,
+  Briefcase,
+  ChevronDown,
+  FileStack,
+  FileText,
+  Folder,
+  FolderOpen,
+  Layers,
+  Package,
+  Paperclip,
+  PieChart,
+  TrendingUp,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
 import { api } from "./lib/api";
-import type { AppState, JobKind } from "./lib/types";
+import type { AppState, IntakeQuestion, JobKind } from "./lib/types";
+import logoSrc from "./logo.jpg";
+
+const PROJECT_ICONS: LucideIcon[] = [
+  Folder,
+  FolderOpen,
+  FileStack,
+  BarChart3,
+  TrendingUp,
+  Briefcase,
+  Package,
+  Layers,
+  BookOpen,
+  PieChart,
+];
+
+function projectIcon(id: string): LucideIcon {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) {
+    h = (h << 5) - h + id.charCodeAt(i);
+    h |= 0;
+  }
+  return PROJECT_ICONS[Math.abs(h) % PROJECT_ICONS.length];
+}
 
 type TabKey = "updates" | "finder" | "research";
+type ResearchScreen = "projects" | "project-detail";
 
 const EMPTY_STATE: AppState = {
   data_root: "",
@@ -15,935 +57,1100 @@ const EMPTY_STATE: AppState = {
   update_definitions: []
 };
 
-const tabs: { key: TabKey; label: string; eyebrow: string }[] = [
-  { key: "updates", label: "Automated Updates", eyebrow: "Macro, FX, commodities, equities" },
-  { key: "finder", label: "Report Finder", eyebrow: "Natural-language downloads and site recipes" },
-  { key: "research", label: "Research Projects", eyebrow: "Full-length decks, docs, workbooks" }
+const FAMILIES = [
+  { value: "equity-research", label: "Equity Research" },
+  { value: "quarterly-stock-update", label: "Quarterly Update" },
+  { value: "commodity-report", label: "Commodity Report" },
+  { value: "weekly-commodity-update", label: "Weekly Commodity" },
+  { value: "case-comp", label: "Case Comp / AM" },
+  { value: "macro-update", label: "Macro Recap" }
+];
+
+// Preconfigured template cards (user-curated style packs)
+const TEMPLATE_CARDS = [
+  {
+    id: "traders-ust-equity",
+    label: "Equity Research",
+    desc: "Full 10-page analyst note with valuation, price target, and risk matrix",
+    family: "equity-research",
+    icon: "📊",
+    outputs: ["PPTX", "DOCX", "PDF"],
+  },
+  {
+    id: "traders-ust-quarterly",
+    label: "Post-Earnings Update",
+    desc: "Beat/miss analysis, guidance changes, and revised thesis for earnings calls",
+    family: "quarterly-stock-update",
+    icon: "📅",
+    outputs: ["DOCX", "PDF"],
+  },
+  {
+    id: "traders-ust-commodity",
+    label: "Commodity Report",
+    desc: "Supply/demand balance, positioning data, and price outlook with charts",
+    family: "commodity-report",
+    icon: "🛢️",
+    outputs: ["PPTX", "PDF"],
+  },
+  {
+    id: "traders-ust-casecomp",
+    label: "Case Comp Deck",
+    desc: "Investment recommendation deck in case comp / AM presentation style",
+    family: "case-comp",
+    icon: "🏆",
+    outputs: ["PPTX"],
+  },
+  {
+    id: "traders-ust-macro",
+    label: "Macro Recap",
+    desc: "Cross-asset weekly recap with annotated charts and trade ideas",
+    family: "macro-update",
+    icon: "🌍",
+    outputs: ["PPTX", "PDF"],
+  },
+  {
+    id: "traders-ust-weekly-comm",
+    label: "Weekly Commodity",
+    desc: "Short-form commodity update with positioning and near-term catalysts",
+    family: "weekly-commodity-update",
+    icon: "📈",
+    outputs: ["DOCX", "PDF"],
+  },
+  {
+    id: "tmpl_builtin_equity_full",
+    label: "Full Pipeline",
+    desc: "PDF → 5 charts → DCF Excel + comps → DOCX report. Two output files: report.docx + valuation.xlsx",
+    family: "equity-research",
+    icon: "⚡",
+    outputs: ["DOCX", "XLSX"],
+    badge: "test",
+  },
+];
+
+const TEMPLATE_ICONS: Record<string, LucideIcon> = {
+  "traders-ust-equity":    BarChart3,
+  "traders-ust-quarterly": TrendingUp,
+  "traders-ust-commodity": Package,
+  "traders-ust-casecomp":  Briefcase,
+  "traders-ust-macro":     PieChart,
+  "traders-ust-weekly-comm": Layers,
+  "tmpl_builtin_equity_full": Zap,
+};
+
+const FORMAT_OPTIONS: { value: string; label: string; icon: ReactNode }[] = [
+  { value: "pptx", label: "PPTX", icon: <Layers size={13} /> },
+  { value: "docx", label: "DOCX", icon: <FileText size={13} /> },
+  { value: "pdf",  label: "PDF",  icon: <BookOpen size={13} /> },
+];
+
+const tabs: { key: TabKey; label: string; icon: string }[] = [
+  { key: "research", label: "Research", icon: "◈" },
+  { key: "updates", label: "Updates", icon: "⟳" },
+  { key: "finder", label: "Finder", icon: "⬡" }
 ];
 
 function csvToList(value: string) {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
+  return value.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
 function App() {
-  const [activeTab, setActiveTab] = useState<TabKey>("research");
+  const [tab, setTab] = useState<TabKey>("research");
   const [state, setState] = useState<AppState>(EMPTY_STATE);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
-  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showTerminal, setShowTerminal] = useState(false);
+  const [terminalText, setTerminalText] = useState("");
+  const terminalRef = useRef<HTMLPreElement>(null);
 
-  const [templateForm, setTemplateForm] = useState({
-    name: "",
-    family: "equity-research",
-    outputFormats: "pptx,docx,pdf",
-    sourcePath: "",
-    notes: ""
-  });
+  // Research tab state machine
+  const [researchScreen, setResearchScreen] = useState<ResearchScreen>("projects");
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [showNewProject, setShowNewProject] = useState(false);
 
-  const [projectForm, setProjectForm] = useState({
-    name: "",
-    objective: "",
-    audience: "traders",
-    family: "equity-research"
-  });
+  // New project form
+  const [projectForm, setProjectForm] = useState({ name: "" });
 
-  const [researchForm, setResearchForm] = useState({
-    title: "",
-    family: "equity-research",
-    objective: "",
-    audience: "traders",
-    outputFormat: "pptx",
-    projectId: "",
-    templateId: "",
-    providerNames: "premium-primary",
-    sourcePaths: [] as string[],
-    urls: "",
-    customInstructions: "",
-    questions: "What matters most for positioning?\nWhat charts or diagrams would sharpen the message?"
-  });
+  // Chat / job intake within a project
+  const [chatMsg, setChatMsg] = useState("");
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+  const [jobSources, setJobSources] = useState<string[]>([]);
+  const [jobOutputFormat, setJobOutputFormat] = useState("pptx");
+  const [jobFamily, setJobFamily] = useState("equity-research");
+  const [showConnectors, setShowConnectors] = useState(false);
+  const [showFormatPicker, setShowFormatPicker] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  // Intake question flow
+  const [intakeStep, setIntakeStep] = useState<"compose" | "questions" | "done">("compose");
+  const [intakeQuestions, setIntakeQuestions] = useState<IntakeQuestion[]>([]);
+  const [intakeAnswers, setIntakeAnswers] = useState<Record<string, string[]>>({});
 
+  const [executor, setExecutor] = useState<"codex" | "claude">("codex");
+  const [activeJobLog, setActiveJobLog] = useState("");
+  const [activeJobQuestions, setActiveJobQuestions] = useState("");
+  const chatRef = useRef<HTMLTextAreaElement>(null);
+  const connectorsRef = useRef<HTMLDivElement>(null);
+  const formatPickerRef = useRef<HTMLDivElement>(null);
+  const jobLogRef = useRef<HTMLPreElement>(null);
+
+  // Update definition form
   const [updateForm, setUpdateForm] = useState({
-    name: "",
-    cadence: "daily",
-    family: "macro-update",
-    outputFormat: "pdf",
-    instruments: "EURUSD, XAUUSD, Brent, SPY",
-    templateId: ""
+    name: "", cadence: "daily", family: "macro-update", outputFormat: "pdf",
+    instruments: "EURUSD, XAUUSD, Brent, SPY", templateId: ""
   });
 
+  // Finder form
   const [finderForm, setFinderForm] = useState({
-    title: "",
-    projectId: "",
-    sourceSite: "visionalpha-internal",
-    request: "",
-    downloadPaths: [] as string[],
-    outputFormat: "pdf"
+    title: "", projectId: "", sourceSite: "visionalpha-internal", request: "",
+    downloadPaths: [] as string[], outputFormat: "pdf"
   });
+  const [finderRecipeId, setFinderRecipeId] = useState<string | null>(null);
+  const [finderLog, setFinderLog] = useState("");
+  const [finderStatus, setFinderStatus] = useState("");
 
+  // Jobs
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [qaText, setQaText] = useState("");
-
   const selectedJob = useMemo(
-    () => state.jobs.find((job) => job.id === selectedJobId) || state.jobs[0] || null,
+    () => state.jobs.find((j) => j.id === selectedJobId) || null,
     [selectedJobId, state.jobs]
+  );
+
+  const activeProject = useMemo(
+    () => state.projects.find((p) => p.id === activeProjectId) || null,
+    [activeProjectId, state.projects]
+  );
+
+  const projectJobs = useMemo(
+    () => state.jobs.filter((j) => (j as any).project_id === activeProjectId),
+    [state.jobs, activeProjectId]
   );
 
   async function refreshState() {
     setLoading(true);
     setError(null);
     try {
-      const nextState = await api.state();
-      setState(nextState);
-      setSelectedJobId((current) => current || nextState.jobs[0]?.id || null);
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Unable to load app state");
+      const s = await api.state();
+      setState(s);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to load app state");
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => {
-    refreshState();
-  }, []);
+  useEffect(() => { refreshState(); }, []);
 
   async function withBusy(label: string, fn: () => Promise<void>) {
     setBusy(label);
     setMessage(null);
     setError(null);
-    try {
-      await fn();
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Something failed");
-    } finally {
-      setBusy(null);
-    }
+    try { await fn(); }
+    catch (e) { setError(e instanceof Error ? e.message : "Something failed"); }
+    finally { setBusy(null); }
   }
+
+  useEffect(() => {
+    if (!showTerminal) return;
+
+    let active = true;
+
+    async function fetchLog() {
+      if (!window.desktop?.getBackendLog) return;
+      try {
+        const text = await window.desktop.getBackendLog();
+        if (active) setTerminalText(text);
+      } catch {
+        // ignore
+      }
+    }
+
+    fetchLog();
+    const id = setInterval(fetchLog, 1000);
+
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, [showTerminal]);
+
+  useEffect(() => {
+    if (terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }
+  }, [terminalText]);
+
+  useEffect(() => {
+    function handleOutsideClick(e: MouseEvent) {
+      if (connectorsRef.current && !connectorsRef.current.contains(e.target as Node)) {
+        setShowConnectors(false);
+      }
+      if (formatPickerRef.current && !formatPickerRef.current.contains(e.target as Node)) {
+        setShowFormatPicker(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  // Live log polling for running jobs
+  useEffect(() => {
+    if (!selectedJob || selectedJob.status !== "agent_running") {
+      setActiveJobLog("");
+      return;
+    }
+    let active = true;
+    const poll = async () => {
+      try {
+        const { log } = await api.jobLogs(selectedJob.id);
+        if (active) setActiveJobLog(log);
+      } catch { /* ignore */ }
+    };
+    poll();
+    const id = setInterval(poll, 2000);
+    return () => { active = false; clearInterval(id); };
+  }, [selectedJob?.id, selectedJob?.status]);
+
+  // Auto-scroll job log
+  useEffect(() => {
+    if (jobLogRef.current) jobLogRef.current.scrollTop = jobLogRef.current.scrollHeight;
+  }, [activeJobLog]);
+
+  // Finder recipe log polling
+  useEffect(() => {
+    if (!finderRecipeId || finderStatus === "done" || finderStatus === "error") return;
+    let active = true;
+    const poll = async () => {
+      try {
+        const { log, status } = await api.finderLog(finderRecipeId);
+        if (active) { setFinderLog(log); setFinderStatus(status); }
+      } catch { /* ignore */ }
+    };
+    poll();
+    const id = setInterval(poll, 2000);
+    return () => { active = false; clearInterval(id); };
+  }, [finderRecipeId, finderStatus]);
+
+  // Question polling for running jobs
+  useEffect(() => {
+    if (!selectedJob || selectedJob.status !== "agent_running") {
+      setActiveJobQuestions("");
+      return;
+    }
+    let active = true;
+    const poll = async () => {
+      try {
+        const { questions } = await api.jobQuestions(selectedJob.id);
+        if (active && questions && questions.trim() !== "No pending questions yet.")
+          setActiveJobQuestions(questions);
+      } catch { /* ignore */ }
+    };
+    poll();
+    const id = setInterval(poll, 3000);
+    return () => { active = false; clearInterval(id); };
+  }, [selectedJob?.id, selectedJob?.status]);
 
   async function choosePaths(mode: "files" | "folders" | "mixed") {
-    return window.desktop.pickPaths({ mode, multiple: true });
+    if (window.desktop?.pickPaths) return window.desktop.pickPaths({ mode, multiple: true });
+    return [];
   }
 
-  async function onTemplateSubmit(event: FormEvent) {
-    event.preventDefault();
-    await withBusy("Saving template", async () => {
-      await api.registerTemplate({
-        name: templateForm.name,
-        family: templateForm.family,
-        output_formats: csvToList(templateForm.outputFormats),
-        source_path: templateForm.sourcePath,
-        notes: templateForm.notes
-      });
-      setMessage("Template registered in the local library.");
-      setTemplateForm((current) => ({ ...current, name: "", sourcePath: "", notes: "" }));
-      await refreshState();
-    });
-  }
-
-  async function onProjectSubmit(event: FormEvent) {
-    event.preventDefault();
+  async function onCreateProject(e: FormEvent) {
+    e.preventDefault();
     await withBusy("Creating project", async () => {
-      await api.createProject(projectForm);
-      setMessage("Research project created.");
-      setProjectForm({
-        name: "",
-        objective: "",
-        audience: "traders",
-        family: "equity-research"
-      });
+      const proj = await api.createProject({ name: projectForm.name });
+      setMessage("Project created.");
+      setProjectForm({ name: "" });
+      setShowNewProject(false);
       await refreshState();
+      setActiveProjectId((proj as any).id || null);
+      setResearchScreen("project-detail");
     });
   }
 
-  async function createJob(kind: JobKind, payload: Record<string, unknown>, successMessage: string) {
+  async function openProject(id: string) {
+    setActiveProjectId(id);
+    setResearchScreen("project-detail");
+    setSelectedJobId(null);
+    setChatMsg("");
+    setJobSources([]);
+    setSelectedTemplate(null);
+  }
+
+  async function submitResearchJob(e: FormEvent) {
+    e.preventDefault();
+    if (!chatMsg.trim() && !jobSources.length) return;
+    // First step: show intake questions
+    if (intakeStep === "compose") {
+      const tpl = TEMPLATE_CARDS.find((t) => t.id === selectedTemplate);
+      await withBusy("Thinking…", async () => {
+        const { questions } = await api.intakeQuestions({
+          objective: chatMsg,
+          family: tpl?.family || jobFamily,
+        });
+        setIntakeQuestions(questions);
+        setIntakeAnswers({});
+        setIntakeStep("questions");
+      });
+      return;
+    }
+    // Second step (answers confirmed or skipped): create job with collected answers
+    if (intakeStep !== "done") return;
+    const tpl = TEMPLATE_CARDS.find((t) => t.id === selectedTemplate);
     await withBusy("Scaffolding workspace", async () => {
-      await api.createJob({
-        kind,
-        ...payload
+      const job = await api.createJob({
+        kind: "research" as JobKind,
+        title: chatMsg.slice(0, 80) || "Research job",
+        family: tpl?.family || jobFamily,
+        objective: chatMsg,
+        output_format: jobOutputFormat,
+        project_id: activeProjectId || null,
+        template_id: selectedTemplate || null,
+        provider_names: ["stub"],
+        source_paths: jobSources,
+        urls: [],
+        custom_instructions: "",
+        intake_answers: intakeAnswers,
+        question_prompts: [],
+        valuation_required: intakeAnswers["valuation"]?.[0] !== "none",
       });
-      setMessage(successMessage);
+      setMessage("Workspace ready — launch Codex to generate.");
+      setChatMsg("");
+      setJobSources([]);
+      setIntakeStep("compose");
+      setIntakeQuestions([]);
+      setIntakeAnswers({});
+      setSelectedJobId((job as any).id || null);
       await refreshState();
     });
   }
 
-  async function onResearchSubmit(event: FormEvent) {
-    event.preventDefault();
-    await createJob(
-      "research",
-      {
-        title: researchForm.title,
-        family: researchForm.family,
-        objective: researchForm.objective,
-        audience: researchForm.audience,
-        output_format: researchForm.outputFormat,
-        project_id: researchForm.projectId || null,
-        template_id: researchForm.templateId || null,
-        provider_names: csvToList(researchForm.providerNames),
-        source_paths: researchForm.sourcePaths,
-        urls: researchForm.urls.split("\n").map((item) => item.trim()).filter(Boolean),
-        custom_instructions: researchForm.customInstructions,
-        question_prompts: researchForm.questions.split("\n").map((item) => item.trim()).filter(Boolean),
-        valuation_required: true
-      },
-      "Research workspace prepared and ready for Codex."
-    );
-  }
-
-  async function onUpdateDefinitionSubmit(event: FormEvent) {
-    event.preventDefault();
-    await withBusy("Saving update definition", async () => {
+  async function onUpdateSubmit(e: FormEvent) {
+    e.preventDefault();
+    await withBusy("Saving definition", async () => {
       await api.createUpdateDefinition({
-        name: updateForm.name,
-        cadence: updateForm.cadence,
-        family: updateForm.family,
-        output_format: updateForm.outputFormat,
-        instruments: csvToList(updateForm.instruments),
+        name: updateForm.name, cadence: updateForm.cadence, family: updateForm.family,
+        output_format: updateForm.outputFormat, instruments: csvToList(updateForm.instruments),
         template_id: updateForm.templateId || null
       });
-      setMessage("Automated update definition saved.");
-      setUpdateForm((current) => ({ ...current, name: "" }));
+      setMessage("Update definition saved.");
+      setUpdateForm((c) => ({ ...c, name: "" }));
       await refreshState();
     });
   }
 
-  async function onFinderSubmit(event: FormEvent) {
-    event.preventDefault();
-    await createJob(
-      "finder",
-      {
-        title: finderForm.title,
-        family: "report-finder",
-        objective: finderForm.request,
-        audience: "internal-research",
-        output_format: finderForm.outputFormat,
-        project_id: finderForm.projectId || null,
-        source_paths: finderForm.downloadPaths,
-        custom_instructions: `Site target: ${finderForm.sourceSite}\nWrite discovered download targets, cookies/session assumptions, and any blockers into context/questions.md before attempting automation.`,
-        question_prompts: [
-          "Which reports should be prioritized if multiple match?",
-          "What metadata should be preserved alongside downloads?"
-        ]
-      },
-      "Report-finder workspace prepared. Add site specifics next and launch Codex when ready."
-    );
+  async function runFinderRecipe() {
+    const downloadDir = finderForm.downloadPaths[0] ?? "";
+    const recipe = {
+      site: finderForm.sourceSite,
+      start_url: `https://${finderForm.sourceSite.replace(/-internal$/, "")}.com`,
+      headless: false,
+      search: { query: finderForm.request, field_selector: "input[type=search],input[name=q]", submit_selector: "button[type=submit]" },
+      download_links: { link_selector: "a[href$='.pdf']", file_types: [".pdf"], max_files: 10 },
+    };
+    const { recipe_id } = await api.runFinder({ recipe, download_dir: downloadDir });
+    setFinderRecipeId(recipe_id);
+    setFinderStatus("running");
+    setFinderLog("");
+    setMessage("Browser worker started — see log below.");
   }
 
-  async function launchJob(jobId: string) {
-    await withBusy("Launching Codex", async () => {
-      await api.launchJob(jobId);
-      setMessage("Codex launch command prepared and opened locally.");
+  async function onFinderSubmit(e: FormEvent) {
+    e.preventDefault();
+    await withBusy("Staging workspace", async () => {
+      await api.createJob({
+        kind: "finder" as JobKind,
+        title: finderForm.title, family: "report-finder",
+        objective: finderForm.request,
+        output_format: finderForm.outputFormat, project_id: finderForm.projectId || null,
+        source_paths: finderForm.downloadPaths,
+        custom_instructions: `Site: ${finderForm.sourceSite}`,
+        question_prompts: []
+      });
+      setMessage("Finder workspace staged.");
+      await refreshState();
+    });
+  }
+
+  async function launchJob(id: string) {
+    await withBusy(`Launching ${executor}`, async () => {
+      await api.launchJob(id, executor);
+      setMessage(`${executor} launched — logs streaming below.`);
       await refreshState();
     });
   }
 
   async function appendAnswer() {
-    if (!selectedJob || !qaText.trim()) {
-      return;
-    }
-    await withBusy("Appending answer", async () => {
+    if (!selectedJob || !qaText.trim()) return;
+    await withBusy("Appending", async () => {
       await api.appendQa(selectedJob.id, { content: qaText.trim() });
       setQaText("");
-      setMessage("Answer added to the workspace context.");
       await refreshState();
     });
   }
 
-  const metrics = [
-    { label: "Projects", value: state.projects.length.toString().padStart(2, "0") },
-    { label: "Templates", value: state.templates.length.toString().padStart(2, "0") },
-    { label: "Live Jobs", value: state.jobs.length.toString().padStart(2, "0") },
-    { label: state.executor_name, value: state.executor_available ? "Ready" : "Missing" }
-  ];
+  // ──────────────────────────────────────────────────────────
+  // Render helpers
+  // ──────────────────────────────────────────────────────────
+
+  function renderProjectsList() {
+    return (
+      <div className="projects-view">
+        <div className="projects-header">
+          <h2>Projects</h2>
+          <button className="btn btn-primary" onClick={() => setShowNewProject(true)}>
+            <span>+</span> New project
+          </button>
+        </div>
+
+        {showNewProject && (
+          <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowNewProject(false); }}>
+            <form className="new-project-card" onSubmit={onCreateProject}>
+              <p className="npc-title">New Project</p>
+              <label>
+                Project name
+                <input
+                  autoFocus
+                  placeholder="e.g. Broadcom Q2 Research"
+                  value={projectForm.name}
+                  onChange={(e) => setProjectForm((c) => ({ ...c, name: e.target.value }))}
+                  required
+                />
+              </label>
+              <div className="npc-actions">
+                <button type="button" className="btn btn-ghost btn-sm"
+                  onClick={() => setShowNewProject(false)}>Cancel</button>
+                <button className="btn btn-primary btn-sm" disabled={!!busy}>
+                  {busy ? "Creating…" : "Create project"}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {state.projects.length === 0 && !showNewProject ? (
+          <div className="empty-state">
+            <div className="empty-icon">◈</div>
+            <p>No projects yet.</p>
+            <button className="btn btn-primary" onClick={() => setShowNewProject(true)}>
+              Create your first project
+            </button>
+          </div>
+        ) : (
+          <div className="project-grid">
+            {state.projects.map((p) => {
+              const Icon = projectIcon(p.id);
+              return (
+                <button key={p.id} className="project-card" onClick={() => openProject(p.id)}>
+                  <span className="project-card-icon">
+                    <Icon size={20} strokeWidth={1.8} />
+                  </span>
+                  <h3>{p.name}</h3>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderProjectDetail() {
+    if (!activeProject) return null;
+    const tpl = selectedTemplate ? TEMPLATE_CARDS.find((t) => t.id === selectedTemplate) : null;
+    const fmtOption = FORMAT_OPTIONS.find((o) => o.value === jobOutputFormat) ?? FORMAT_OPTIONS[0];
+
+    return (
+      <div className="project-detail-view">
+        {/* Breadcrumb */}
+        <div className="detail-breadcrumb">
+          <button
+            className="back-icon-btn"
+            title="Back to Projects"
+            onClick={() => { setResearchScreen("projects"); setActiveProjectId(null); }}
+          >
+            <ArrowLeft size={15} strokeWidth={2.2} />
+          </button>
+          <span className="breadcrumb-divider">/</span>
+          <h2 className="breadcrumb-current">{activeProject.name}</h2>
+          <div style={{ marginLeft: "auto" }}>
+            <button className="btn btn-ghost btn-sm"
+              onClick={() => window.desktop?.openPath?.((activeProject as any).root_path)}>
+              Open folder
+            </button>
+          </div>
+        </div>
+
+        <div className={`detail-body${selectedJob ? " has-rail" : ""}`}>
+          <div className="detail-main">
+
+            {/* Chat + upload zone + templates — vertically centered stage */}
+            <div className="chat-stage">
+
+              {/* Chat bar */}
+              <form className="chat-area" onSubmit={submitResearchJob}>
+                <textarea
+                  ref={chatRef}
+                  className="chat-textarea"
+                  rows={3}
+                  placeholder={tpl
+                    ? `Research with ${tpl.label} template…`
+                    : "Describe what you want — company, ticker, thesis, or objective…"}
+                  value={chatMsg}
+                  onChange={(e) => setChatMsg(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                      e.preventDefault();
+                      (e.currentTarget.form as HTMLFormElement)?.requestSubmit();
+                    }
+                  }}
+                />
+                <div className="chat-actions">
+                  <div className="chat-actions-left">
+
+                    {/* Connectors dropdown — rendered outside overflow context */}
+                    <div className="connectors-wrap" ref={connectorsRef}>
+                      <button type="button" className="chat-pill-btn"
+                        onClick={() => { setShowConnectors(v => !v); setShowFormatPicker(false); }}>
+                        <Paperclip size={13} strokeWidth={2} />
+                        <span>Attach</span>
+                        <ChevronDown size={10} />
+                      </button>
+                      {showConnectors && (
+                        <div className="chat-dropdown">
+                          <button type="button" onClick={async () => {
+                            const p = await choosePaths("mixed");
+                            setJobSources((c) => [...new Set([...c, ...p])]);
+                            setShowConnectors(false);
+                          }}>
+                            <FileText size={13} />
+                            <span>Upload files</span>
+                            <span className="chat-dropdown-hint">PDF, DOCX, XLSX…</span>
+                          </button>
+                          <button type="button" onClick={async () => {
+                            const p = await choosePaths("folders");
+                            setJobSources((c) => [...new Set([...c, ...p])]);
+                            setShowConnectors(false);
+                          }}>
+                            <FolderOpen size={13} />
+                            <span>Upload folder</span>
+                            <span className="chat-dropdown-hint">All files inside</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Format picker */}
+                    <div className="format-picker-wrap" ref={formatPickerRef}>
+                      <button type="button" className="chat-pill-btn"
+                        onClick={() => { setShowFormatPicker(v => !v); setShowConnectors(false); }}>
+                        {fmtOption.icon}
+                        <span>{fmtOption.label}</span>
+                        <ChevronDown size={10} />
+                      </button>
+                      {showFormatPicker && (
+                        <div className="chat-dropdown chat-dropdown-sm">
+                          {FORMAT_OPTIONS.map((opt) => (
+                            <button key={opt.value} type="button"
+                              className={jobOutputFormat === opt.value ? "is-active" : ""}
+                              onClick={() => { setJobOutputFormat(opt.value); setShowFormatPicker(false); }}>
+                              {opt.icon}
+                              <span>{opt.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                  </div>
+                  <button className="btn btn-primary btn-sm" type="submit" disabled={!!busy}>
+                    {busy ? "Working…" : "Generate ↗"}
+                  </button>
+                </div>
+              </form>
+
+              {/* ── Intake question overlay ── */}
+              {intakeStep === "questions" && intakeQuestions.length > 0 && (
+                <div className="intake-panel">
+                  <div className="intake-header">
+                    <span className="intake-title">A few quick questions</span>
+                    <button type="button" className="intake-skip"
+                      onClick={() => { setIntakeStep("compose"); setIntakeQuestions([]); }}>
+                      ✕
+                    </button>
+                  </div>
+                  <div className="intake-questions">
+                    {intakeQuestions.map((q) => (
+                      <div key={q.id} className="intake-q">
+                        <div className="intake-q-text">
+                          {q.text}
+                          {q.multi && <span className="intake-multi-hint"> — pick all that apply</span>}
+                        </div>
+                        <div className="intake-options">
+                          {q.options.map((opt) => {
+                            const selected = (intakeAnswers[q.id] || []).includes(opt.id);
+                            return (
+                              <button
+                                key={opt.id}
+                                type="button"
+                                className={`intake-opt${selected ? " is-selected" : ""}`}
+                                onClick={() => {
+                                  setIntakeAnswers((prev) => {
+                                    const cur = prev[q.id] || [];
+                                    if (q.multi) {
+                                      return { ...prev, [q.id]: selected ? cur.filter(x => x !== opt.id) : [...cur, opt.id] };
+                                    }
+                                    return { ...prev, [q.id]: [opt.id] };
+                                  });
+                                }}
+                              >
+                                {opt.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="intake-footer">
+                    <button type="button" className="btn btn-ghost btn-sm"
+                      onClick={() => { setIntakeStep("compose"); setIntakeQuestions([]); }}>
+                      Back
+                    </button>
+                    <button
+                      className="btn btn-primary"
+                      onClick={(e) => { setIntakeStep("done"); submitResearchJob(e as any); }}
+                    >
+                      Generate ↗
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Source files zone — between chat and templates */}
+              <div
+                className={`upload-zone${isDragOver ? " drag-over" : ""}`}
+                onClick={async () => {
+                  const p = await choosePaths("mixed");
+                  if (p.length) setJobSources(c => [...new Set([...c, ...p])]);
+                }}
+                onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragOver(false); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDragOver(false);
+                  const paths: string[] = [];
+                  for (const f of Array.from(e.dataTransfer.files)) {
+                    const p = (f as any).path as string | undefined;
+                    if (p) paths.push(p);
+                  }
+                  if (paths.length) setJobSources(c => [...new Set([...c, ...paths])]);
+                }}
+              >
+                {jobSources.length === 0 ? (
+                  <div className="upload-zone-empty">
+                    <Paperclip size={14} strokeWidth={1.8} className="upload-zone-icon" />
+                    <span>Drop source files here, or click to browse</span>
+                    <span className="upload-zone-types">PDF · DOCX · XLSX · TXT · folders</span>
+                  </div>
+                ) : (
+                  <div className="upload-zone-chips">
+                    {jobSources.map((p) => (
+                      <span key={p} className="chip">
+                        {p.split("/").pop()}
+                        <button type="button" className="chip-remove"
+                          onClick={(e) => { e.stopPropagation(); setJobSources(c => c.filter(x => x !== p)); }}>×</button>
+                      </span>
+                    ))}
+                    <button type="button" className="upload-zone-add"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        const p = await choosePaths("mixed");
+                        if (p.length) setJobSources(c => [...new Set([...c, ...p])]);
+                      }}>
+                      <Paperclip size={12} />
+                      Add more
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Template cards — horizontal scroll */}
+              <div>
+                <div className="section-label">Choose a template</div>
+                <div className="template-scroll">
+                  {TEMPLATE_CARDS.map((t) => {
+                    const TplIcon = TEMPLATE_ICONS[t.id] ?? FileText;
+                    return (
+                      <button
+                        key={t.id}
+                        className={`tpl-prev-card ${selectedTemplate === t.id ? "is-selected" : ""}`}
+                        onClick={() => {
+                          setSelectedTemplate(selectedTemplate === t.id ? null : t.id);
+                          setJobFamily(t.family);
+                        }}
+                      >
+                        <div className="tpl-prev-doc">
+                          <div className="tpl-prev-top">
+                            <TplIcon size={20} strokeWidth={1.6} className="tpl-prev-icon" />
+                          </div>
+                          <div className="tpl-prev-lines">
+                            <div className="tpl-prev-line l1" />
+                            <div className="tpl-prev-line l2" />
+                            <div className="tpl-prev-line l3" />
+                            <div className="tpl-prev-line l4" />
+                          </div>
+                          {selectedTemplate === t.id && (
+                            <div className="tpl-prev-checkmark">✓</div>
+                          )}
+                        </div>
+                        <div className="tpl-prev-label">
+                          {t.label}
+                          {(t as any).badge && <span className="tpl-badge">{(t as any).badge}</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+            </div>{/* end .chat-stage */}
+
+            {/* Job list for this project */}
+            {projectJobs.length > 0 && (
+              <div className="project-jobs">
+                <div className="section-label">Jobs</div>
+                {projectJobs.map((j) => (
+                  <div key={j.id}
+                    className={`pjob-row ${selectedJobId === j.id ? "is-active" : ""}`}
+                    onClick={() => setSelectedJobId(j.id)}>
+                    <div className="pjob-info">
+                      <strong>{j.title}</strong>
+                      <span className="pjob-meta">{j.family} · {j.output_format} · {j.status}</span>
+                    </div>
+                    <div className="pjob-btns">
+                      <button className="btn btn-teal btn-sm"
+                        onClick={(e) => { e.stopPropagation(); launchJob(j.id); }}>
+                        Launch
+                      </button>
+                      <button className="btn btn-ghost btn-sm"
+                        onClick={(e) => { e.stopPropagation(); window.desktop?.openPath?.(j.result_path); }}>
+                        Results
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Right: selected job detail */}
+          {selectedJob && (
+            <div className="detail-rail">
+              <div className="detail-job-card">
+                <strong>{selectedJob.title}</strong>
+                <p className="dj-meta">
+                  {selectedJob.family} · {selectedJob.output_format}
+                  <span className={`dj-status-dot${selectedJob.status === "agent_running" ? " running" : ""}`} />
+                  {selectedJob.status}
+                </p>
+                <div className="dj-actions">
+                  <button className="btn btn-teal btn-sm"
+                    onClick={() => launchJob(selectedJob.id)}>
+                    {selectedJob.status === "agent_running" ? "Relaunch" : "Launch"}
+                  </button>
+                  <button className="btn btn-ghost btn-sm"
+                    onClick={() => window.desktop?.openPath?.(selectedJob.result_path)}>Results</button>
+                  <button className="btn btn-ghost btn-sm"
+                    onClick={() => window.desktop?.openPath?.(selectedJob.workspace_path)}>Files</button>
+                </div>
+
+                {/* Live log panel */}
+                {activeJobLog && (
+                  <div className="job-log-wrap">
+                    <div className="dj-label-row">
+                      <span className="dj-label">Live output</span>
+                      {selectedJob.status === "agent_running" && <span className="live-dot" />}
+                    </div>
+                    <pre ref={jobLogRef} className="job-log">{activeJobLog}</pre>
+                  </div>
+                )}
+
+                {/* Agent questions */}
+                {activeJobQuestions && (
+                  <div className="agent-questions">
+                    <span className="dj-label">Agent questions</span>
+                    <pre className="dj-prompt">{activeJobQuestions}</pre>
+                  </div>
+                )}
+
+                <label className="dj-label">
+                  Answer / add context
+                  <textarea rows={3} value={qaText} onChange={(e) => setQaText(e.target.value)}
+                    placeholder="Answer questions or add instructions for the agent…" />
+                </label>
+                <button className="btn btn-primary btn-sm" onClick={appendAnswer}
+                  disabled={!!busy || !qaText.trim()}>
+                  Append &amp; relaunch
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────
+  // Main render
+  // ──────────────────────────────────────────────────────────
 
   return (
     <div className="shell">
+      {/* Sidebar */}
       <aside className="sidebar">
         <div className="brand">
-          <p className="brand-kicker">Local-First Finance AI</p>
-          <h1>Market Workbench</h1>
-          <p className="brand-copy">
-            A desktop control room for full-length market research decks, docs, update notes, and
-            report acquisition workflows.
-          </p>
+          <img src={logoSrc} alt="Traders@UST" className="brand-logo" />
+          <div className="brand-text">
+            <span className="brand-name">Market Workbench</span>
+            <span className="brand-sub">Research · Reports · Updates</span>
+          </div>
         </div>
 
         <nav className="tab-list">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              className={`tab-button ${activeTab === tab.key ? "is-active" : ""}`}
-              onClick={() => setActiveTab(tab.key)}
-            >
-              <span>{tab.label}</span>
-              <small>{tab.eyebrow}</small>
+          {tabs.map((t) => (
+            <button key={t.key}
+              className={`tab-btn ${tab === t.key ? "is-active" : ""}`}
+              onClick={() => setTab(t.key)}>
+              <span className="tab-icon">{t.icon}</span>
+              <span>{t.label}</span>
             </button>
           ))}
         </nav>
 
-        <div className="status-card">
-          <p className="status-title">Workspace root</p>
-          <p className="status-path">{state.data_root || "Loading local storage..."}</p>
-          <button className="ghost-button" onClick={() => refreshState()}>
-            Refresh state
-          </button>
+        <div className="sidebar-footer">
+          <div className="executor-switcher">
+            <button
+              className={`exec-btn${executor === "codex" ? " is-active" : ""}`}
+              onClick={() => setExecutor("codex")}
+              title="Codex CLI"
+            >Codex</button>
+            <button
+              className={`exec-btn${executor === "claude" ? " is-active" : ""}`}
+              onClick={() => setExecutor("claude")}
+              title="Claude Code (coming soon)"
+            >Claude</button>
+          </div>
+          <button className="refresh-btn" onClick={() => setShowTerminal(v => !v)} title="Server log">⌥</button>
+          <button className="refresh-btn" onClick={refreshState} title="Refresh state">↻</button>
         </div>
       </aside>
 
+      {/* Content */}
       <main className="content">
-        <section className="hero">
-          <div>
-            <p className="eyebrow">Cheap-by-design architecture</p>
-            <h2>
-              Codex stays local, the app handles the orchestration, and every run becomes a clean
-              workspace folder you can inspect.
-            </h2>
-          </div>
-          <div className="metric-grid">
-            {metrics.map((metric) => (
-              <article key={metric.label} className="metric-card">
-                <span>{metric.label}</span>
-                <strong>{metric.value}</strong>
-              </article>
-            ))}
-          </div>
-        </section>
+        {/* Banners */}
+        {busy   && <div className="banner info">{busy}…</div>}
+        {message && <div className="banner success">{message}</div>}
+        {error   && <div className="banner error">{error}</div>}
 
-        {loading ? <div className="banner">Loading local service…</div> : null}
-        {busy ? <div className="banner info">{busy}…</div> : null}
-        {message ? <div className="banner success">{message}</div> : null}
-        {error ? <div className="banner error">{error}</div> : null}
+        {/* Tab content with animation */}
+        <div key={tab} className="tab-panel">
+          {tab === "research" && (
+            researchScreen === "projects" ? renderProjectsList() : renderProjectDetail()
+          )}
 
-        <section className="workspace-grid">
-          <div className="main-panel">
-            {activeTab === "research" ? (
-              <>
-                <div className="panel-grid two-up">
-                  <form className="panel" onSubmit={onProjectSubmit}>
-                    <div className="panel-heading">
-                      <p className="eyebrow">Project library</p>
-                      <h3>New research project</h3>
-                    </div>
-                    <label>
-                      Project name
-                      <input
-                        value={projectForm.name}
-                        onChange={(event) =>
-                          setProjectForm((current) => ({ ...current, name: event.target.value }))
-                        }
-                        required
-                      />
-                    </label>
-                    <label>
-                      Objective
-                      <textarea
-                        rows={4}
-                        value={projectForm.objective}
-                        onChange={(event) =>
-                          setProjectForm((current) => ({
-                            ...current,
-                            objective: event.target.value
-                          }))
-                        }
-                        required
-                      />
-                    </label>
-                    <div className="field-row">
-                      <label>
-                        Audience
-                        <input
-                          value={projectForm.audience}
-                          onChange={(event) =>
-                            setProjectForm((current) => ({
-                              ...current,
-                              audience: event.target.value
-                            }))
-                          }
-                        />
-                      </label>
-                      <label>
-                        Family
-                        <input
-                          value={projectForm.family}
-                          onChange={(event) =>
-                            setProjectForm((current) => ({ ...current, family: event.target.value }))
-                          }
-                        />
-                      </label>
-                    </div>
-                    <button className="primary-button">Create project</button>
-                  </form>
-
-                  <form className="panel" onSubmit={onTemplateSubmit}>
-                    <div className="panel-heading">
-                      <p className="eyebrow">Template library</p>
-                      <h3>Register a style pack</h3>
-                    </div>
-                    <label>
-                      Template name
-                      <input
-                        value={templateForm.name}
-                        onChange={(event) =>
-                          setTemplateForm((current) => ({ ...current, name: event.target.value }))
-                        }
-                        required
-                      />
-                    </label>
-                    <div className="field-row">
-                      <label>
-                        Family
-                        <input
-                          value={templateForm.family}
-                          onChange={(event) =>
-                            setTemplateForm((current) => ({ ...current, family: event.target.value }))
-                          }
-                        />
-                      </label>
-                      <label>
-                        Output formats
-                        <input
-                          value={templateForm.outputFormats}
-                          onChange={(event) =>
-                            setTemplateForm((current) => ({
-                              ...current,
-                              outputFormats: event.target.value
-                            }))
-                          }
-                        />
-                      </label>
-                    </div>
-                    <label>
-                      Template source path
-                      <div className="picker-row">
-                        <input
-                          value={templateForm.sourcePath}
-                          onChange={(event) =>
-                            setTemplateForm((current) => ({
-                              ...current,
-                              sourcePath: event.target.value
-                            }))
-                          }
-                          placeholder="/path/to/template.pptx"
-                          required
-                        />
-                        <button
-                          type="button"
-                          className="ghost-button"
-                          onClick={async () => {
-                            const paths = await choosePaths("files");
-                            if (paths[0]) {
-                              setTemplateForm((current) => ({ ...current, sourcePath: paths[0] }));
-                            }
-                          }}
-                        >
-                          Browse
-                        </button>
-                      </div>
-                    </label>
-                    <label>
-                      Notes
-                      <textarea
-                        rows={4}
-                        value={templateForm.notes}
-                        onChange={(event) =>
-                          setTemplateForm((current) => ({ ...current, notes: event.target.value }))
-                        }
-                      />
-                    </label>
-                    <button className="primary-button">Save template</button>
-                  </form>
-                </div>
-
-                <form className="panel" onSubmit={onResearchSubmit}>
-                  <div className="panel-heading">
-                    <p className="eyebrow">Generation workspace</p>
-                    <h3>Prepare a long-form research run</h3>
-                  </div>
-                  <div className="field-row three-up">
-                    <label>
-                      Job title
-                      <input
-                        value={researchForm.title}
-                        onChange={(event) =>
-                          setResearchForm((current) => ({ ...current, title: event.target.value }))
-                        }
-                        required
-                      />
-                    </label>
-                    <label>
-                      Family
-                      <input
-                        value={researchForm.family}
-                        onChange={(event) =>
-                          setResearchForm((current) => ({ ...current, family: event.target.value }))
-                        }
-                      />
-                    </label>
-                    <label>
-                      Output format
-                      <select
-                        value={researchForm.outputFormat}
-                        onChange={(event) =>
-                          setResearchForm((current) => ({
-                            ...current,
-                            outputFormat: event.target.value
-                          }))
-                        }
-                      >
-                        <option value="pptx">PPTX</option>
-                        <option value="docx">DOCX</option>
-                        <option value="pdf">PDF</option>
-                      </select>
-                    </label>
-                  </div>
-                  <div className="field-row">
-                    <label>
-                      Project
-                      <select
-                        value={researchForm.projectId}
-                        onChange={(event) =>
-                          setResearchForm((current) => ({ ...current, projectId: event.target.value }))
-                        }
-                      >
-                        <option value="">No project</option>
-                        {state.projects.map((project) => (
-                          <option key={project.id} value={project.id}>
-                            {project.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Template
-                      <select
-                        value={researchForm.templateId}
-                        onChange={(event) =>
-                          setResearchForm((current) => ({ ...current, templateId: event.target.value }))
-                        }
-                      >
-                        <option value="">No template</option>
-                        {state.templates.map((template) => (
-                          <option key={template.id} value={template.id}>
-                            {template.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Providers
-                      <input
-                        value={researchForm.providerNames}
-                        onChange={(event) =>
-                          setResearchForm((current) => ({
-                            ...current,
-                            providerNames: event.target.value
-                          }))
-                        }
-                      />
-                    </label>
-                  </div>
+          {tab === "updates" && (
+          <div className="std-view">
+            <div className="std-header">
+              <h2>Automated Updates</h2>
+            </div>
+            <div className="two-col">
+              <form className="panel" onSubmit={onUpdateSubmit}>
+                <div className="panel-heading">New update definition</div>
+                <label>
+                  Name
+                  <input value={updateForm.name}
+                    onChange={(e) => setUpdateForm((c) => ({ ...c, name: e.target.value }))} required />
+                </label>
+                <div className="field-row">
                   <label>
-                    Objective
-                    <textarea
-                      rows={4}
-                      value={researchForm.objective}
-                      onChange={(event) =>
-                        setResearchForm((current) => ({ ...current, objective: event.target.value }))
-                      }
-                      required
-                    />
-                  </label>
-                  <label>
-                    Source files, folders, filings, transcripts
-                    <div className="picker-stack">
-                      <div className="picker-row">
-                        <button
-                          type="button"
-                          className="ghost-button"
-                          onClick={async () => {
-                            const paths = await choosePaths("mixed");
-                            setResearchForm((current) => ({
-                              ...current,
-                              sourcePaths: Array.from(new Set([...current.sourcePaths, ...paths]))
-                            }));
-                          }}
-                        >
-                          Add files or folders
-                        </button>
-                        <span>{researchForm.sourcePaths.length} items selected</span>
-                      </div>
-                      {researchForm.sourcePaths.length ? (
-                        <div className="chip-list">
-                          {researchForm.sourcePaths.map((path) => (
-                            <span className="chip" key={path}>
-                              {path}
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  </label>
-                  <label>
-                    URLs
-                    <textarea
-                      rows={3}
-                      value={researchForm.urls}
-                      onChange={(event) =>
-                        setResearchForm((current) => ({ ...current, urls: event.target.value }))
-                      }
-                      placeholder={"https://...\nhttps://..."}
-                    />
-                  </label>
-                  <div className="field-row">
-                    <label>
-                      Custom instructions
-                      <textarea
-                        rows={6}
-                        value={researchForm.customInstructions}
-                        onChange={(event) =>
-                          setResearchForm((current) => ({
-                            ...current,
-                            customInstructions: event.target.value
-                          }))
-                        }
-                      />
-                    </label>
-                    <label>
-                      Questions the agent should answer
-                      <textarea
-                        rows={6}
-                        value={researchForm.questions}
-                        onChange={(event) =>
-                          setResearchForm((current) => ({ ...current, questions: event.target.value }))
-                        }
-                      />
-                    </label>
-                  </div>
-                  <button className="primary-button">Prepare research workspace</button>
-                </form>
-              </>
-            ) : null}
-
-            {activeTab === "updates" ? (
-              <div className="panel-grid two-up">
-                <form className="panel" onSubmit={onUpdateDefinitionSubmit}>
-                  <div className="panel-heading">
-                    <p className="eyebrow">Recurring runs</p>
-                    <h3>Create an update definition</h3>
-                  </div>
-                  <label>
-                    Name
-                    <input
-                      value={updateForm.name}
-                      onChange={(event) =>
-                        setUpdateForm((current) => ({ ...current, name: event.target.value }))
-                      }
-                      required
-                    />
-                  </label>
-                  <div className="field-row">
-                    <label>
-                      Cadence
-                      <select
-                        value={updateForm.cadence}
-                        onChange={(event) =>
-                          setUpdateForm((current) => ({ ...current, cadence: event.target.value }))
-                        }
-                      >
-                        <option value="daily">Daily</option>
-                        <option value="weekly">Weekly</option>
-                        <option value="adhoc">Ad hoc</option>
-                      </select>
-                    </label>
-                    <label>
-                      Output
-                      <select
-                        value={updateForm.outputFormat}
-                        onChange={(event) =>
-                          setUpdateForm((current) => ({
-                            ...current,
-                            outputFormat: event.target.value
-                          }))
-                        }
-                      >
-                        <option value="pdf">PDF</option>
-                        <option value="pptx">PPTX</option>
-                        <option value="docx">DOCX</option>
-                      </select>
-                    </label>
-                  </div>
-                  <label>
-                    Family
-                    <input
-                      value={updateForm.family}
-                      onChange={(event) =>
-                        setUpdateForm((current) => ({ ...current, family: event.target.value }))
-                      }
-                    />
-                  </label>
-                  <label>
-                    Instruments
-                    <textarea
-                      rows={4}
-                      value={updateForm.instruments}
-                      onChange={(event) =>
-                        setUpdateForm((current) => ({
-                          ...current,
-                          instruments: event.target.value
-                        }))
-                      }
-                    />
-                  </label>
-                  <label>
-                    Template
-                    <select
-                      value={updateForm.templateId}
-                      onChange={(event) =>
-                        setUpdateForm((current) => ({ ...current, templateId: event.target.value }))
-                      }
-                    >
-                      <option value="">No template</option>
-                      {state.templates.map((template) => (
-                        <option key={template.id} value={template.id}>
-                          {template.name}
-                        </option>
-                      ))}
+                    Cadence
+                    <select value={updateForm.cadence}
+                      onChange={(e) => setUpdateForm((c) => ({ ...c, cadence: e.target.value }))}>
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="adhoc">Ad hoc</option>
                     </select>
                   </label>
-                  <button className="primary-button">Save update definition</button>
-                </form>
-
-                <section className="panel">
-                  <div className="panel-heading">
-                    <p className="eyebrow">Runbook</p>
-                    <h3>Definitions ready to run</h3>
-                  </div>
-                  <div className="stack-list">
-                    {state.update_definitions.map((definition) => (
-                      <article className="list-card" key={definition.id}>
-                        <div>
-                          <h4>{definition.name}</h4>
-                          <p>
-                            {definition.cadence} · {definition.family} · {definition.output_format}
-                          </p>
-                          <small>{definition.instruments.join(", ")}</small>
-                        </div>
-                        <button
-                          className="ghost-button"
-                          onClick={async () => {
-                            await withBusy("Running update definition", async () => {
-                              await api.runUpdateDefinition(definition.id);
-                              setMessage("Update run prepared.");
-                              await refreshState();
-                            });
-                          }}
-                        >
-                          Run now
-                        </button>
-                      </article>
-                    ))}
-                    {state.update_definitions.length === 0 ? (
-                      <p className="empty-copy">
-                        No recurring definitions yet. Save one here to stamp out daily or weekly
-                        update workspaces.
-                      </p>
-                    ) : null}
-                  </div>
-                </section>
-              </div>
-            ) : null}
-
-            {activeTab === "finder" ? (
-              <div className="panel-grid two-up">
-                <form className="panel" onSubmit={onFinderSubmit}>
-                  <div className="panel-heading">
-                    <p className="eyebrow">Download workflows</p>
-                    <h3>Prepare a report-finder task</h3>
-                  </div>
                   <label>
-                    Task title
-                    <input
-                      value={finderForm.title}
-                      onChange={(event) =>
-                        setFinderForm((current) => ({ ...current, title: event.target.value }))
-                      }
-                      required
-                    />
+                    Output
+                    <select value={updateForm.outputFormat}
+                      onChange={(e) => setUpdateForm((c) => ({ ...c, outputFormat: e.target.value }))}>
+                      <option value="pdf">PDF</option>
+                      <option value="pptx">PPTX</option>
+                      <option value="docx">DOCX</option>
+                    </select>
                   </label>
+                </div>
+                <label>
+                  Report type
+                  <select value={updateForm.family}
+                    onChange={(e) => setUpdateForm((c) => ({ ...c, family: e.target.value }))}>
+                    {FAMILIES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                  </select>
+                </label>
+                <label>
+                  Instruments
+                  <textarea rows={2} value={updateForm.instruments}
+                    onChange={(e) => setUpdateForm((c) => ({ ...c, instruments: e.target.value }))} />
+                </label>
+                <button className="btn btn-primary" disabled={!!busy}>Save definition</button>
+              </form>
+
+              <div className="panel">
+                <div className="panel-heading">Saved definitions</div>
+                <div className="stack-list">
+                  {state.update_definitions.map((d) => (
+                    <div className="list-card" key={d.id}>
+                      <div>
+                        <strong>{d.name}</strong>
+                        <p>{d.cadence} · {d.family} · {d.output_format}</p>
+                        <small>{d.instruments.join(", ")}</small>
+                      </div>
+                      <button className="btn btn-teal btn-sm" onClick={async () => {
+                        await withBusy("Running", async () => {
+                          await api.runUpdateDefinition(d.id);
+                          setMessage("Update run staged.");
+                          await refreshState();
+                        });
+                      }}>Run now</button>
+                    </div>
+                  ))}
+                  {state.update_definitions.length === 0 &&
+                    <p className="empty-copy">No definitions yet.</p>}
+                </div>
+              </div>
+            </div>
+          </div>
+          )}
+
+          {tab === "finder" && (
+          <div className="std-view">
+            <div className="std-header">
+              <h2>Report Finder</h2>
+            </div>
+            <div className="two-col">
+              <form className="panel" onSubmit={onFinderSubmit}>
+                <div className="panel-heading">Find &amp; download reports</div>
+                <label>
+                  Task title
+                  <input value={finderForm.title}
+                    onChange={(e) => setFinderForm((c) => ({ ...c, title: e.target.value }))} required />
+                </label>
+                <div className="field-row">
                   <label>
-                    Project destination
-                    <select
-                      value={finderForm.projectId}
-                      onChange={(event) =>
-                        setFinderForm((current) => ({ ...current, projectId: event.target.value }))
-                      }
-                    >
-                      <option value="">No project</option>
-                      {state.projects.map((project) => (
-                        <option key={project.id} value={project.id}>
-                          {project.name}
-                        </option>
-                      ))}
+                    Project
+                    <select value={finderForm.projectId}
+                      onChange={(e) => setFinderForm((c) => ({ ...c, projectId: e.target.value }))}>
+                      <option value="">None</option>
+                      {state.projects.map((p) =>
+                        <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                   </label>
                   <label>
                     Source site
-                    <input
-                      value={finderForm.sourceSite}
-                      onChange={(event) =>
-                        setFinderForm((current) => ({ ...current, sourceSite: event.target.value }))
-                      }
-                    />
+                    <input value={finderForm.sourceSite}
+                      onChange={(e) => setFinderForm((c) => ({ ...c, sourceSite: e.target.value }))} />
                   </label>
-                  <label>
-                    Natural-language request
-                    <textarea
-                      rows={7}
-                      value={finderForm.request}
-                      onChange={(event) =>
-                        setFinderForm((current) => ({ ...current, request: event.target.value }))
-                      }
-                      placeholder="Find the strongest recent Broadcom AI supplier reports with valuation detail, then download the best three into this project."
-                      required
-                    />
-                  </label>
-                  <div className="picker-row">
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      onClick={async () => {
-                        const paths = await choosePaths("folders");
-                        setFinderForm((current) => ({ ...current, downloadPaths: paths }));
-                      }}
-                    >
-                      Attach local download folders
-                    </button>
-                    <span>{finderForm.downloadPaths.length} folders linked</span>
-                  </div>
-                  <button className="primary-button">Prepare finder workspace</button>
-                </form>
-
-                <section className="panel">
-                  <div className="panel-heading">
-                    <p className="eyebrow">Recipe roadmap</p>
-                    <h3>Internal-site automation notes</h3>
-                  </div>
-                  <p className="empty-copy">
-                    The recipe engine is scaffolded locally. The site-specific automation design
-                    doc for your internal report source lives in <code>notes/report-finder-recipes.md</code>.
-                  </p>
-                  <button
-                    className="ghost-button"
-                    onClick={() => window.desktop.openPath(state.finder_notes_path)}
-                  >
-                    Open recipe notes
-                  </button>
-                </section>
-              </div>
-            ) : null}
-          </div>
-
-          <aside className="rail">
-            <section className="panel">
-              <div className="panel-heading">
-                <p className="eyebrow">Recent jobs</p>
-                    <h3>Workspaces and launch actions</h3>
-              </div>
-              <div className="stack-list">
-                {state.jobs.map((job) => (
-                  <article
-                    key={job.id}
-                    className={`job-card ${selectedJob?.id === job.id ? "is-selected" : ""}`}
-                    onClick={() => setSelectedJobId(job.id)}
-                  >
-                    <div>
-                        <strong>{job.title}</strong>
-                      <p>
-                        {job.kind} · {job.family} · {job.output_format}
-                      </p>
-                      <small>{job.status}</small>
-                    </div>
-                    <div className="job-actions">
-                      <button
-                        className="ghost-button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          launchJob(job.id);
-                        }}
-                      >
-                        Launch
-                      </button>
-                      <button
-                        className="ghost-button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          window.desktop.openPath(job.workspace_path);
-                        }}
-                      >
-                        Folder
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-
-            {selectedJob ? (
-              <section className="panel detail-panel">
-                <div className="panel-heading">
-                  <p className="eyebrow">Selected job</p>
-                  <h3>{selectedJob.title}</h3>
                 </div>
-                <p className="detail-meta">
-                  {selectedJob.family} · {selectedJob.output_format} · {selectedJob.status}
+                <label>
+                  What do you want to find?
+                  <textarea rows={5} value={finderForm.request}
+                    onChange={(e) => setFinderForm((c) => ({ ...c, request: e.target.value }))}
+                    placeholder="Find the strongest recent Broadcom AI supplier reports with valuation detail, then download the best three." required />
+                </label>
+                <div className="picker-row" style={{ marginBottom: 16 }}>
+                  <button type="button" className="btn btn-ghost btn-sm"
+                    onClick={async () => {
+                      const p = await choosePaths("folders");
+                      setFinderForm((c) => ({ ...c, downloadPaths: p }));
+                    }}>
+                    + Download folder
+                  </button>
+                  {finderForm.downloadPaths.length > 0 &&
+                    <span className="picker-label">{finderForm.downloadPaths.length} selected</span>}
+                </div>
+                <div className="finder-btn-row">
+                  <button className="btn btn-primary" disabled={!!busy}>Stage workspace</button>
+                  <button type="button" className="btn btn-teal" disabled={!!busy || !finderForm.request.trim()}
+                    onClick={async () => { await withBusy("Launching browser", runFinderRecipe); }}>
+                    Run browser worker
+                  </button>
+                </div>
+              </form>
+              {finderLog && (
+                <div className="finder-log-wrap">
+                  <div className="dj-label-row">
+                    <span className="dj-label">Browser worker</span>
+                    {finderStatus === "running" && <span className="live-dot" />}
+                    {finderStatus !== "running" && <span className="dj-label" style={{ color: finderStatus === "done" ? "var(--ok)" : "var(--warn)" }}>{finderStatus}</span>}
+                  </div>
+                  <pre className="job-log">{finderLog}</pre>
+                </div>
+              )}
+
+              <div className="panel">
+                <div className="panel-heading">Site recipes</div>
+                <p className="empty-copy">
+                  The recipe engine is scaffolded. Add site-specific automation to
+                  <code> notes/report-finder-recipes.md</code>.
                 </p>
-                <div className="detail-actions">
-                  <button
-                    className="ghost-button"
-                    onClick={() => window.desktop.openPath(selectedJob.workspace_path)}
-                  >
-                    Open workspace
-                  </button>
-                  <button
-                    className="ghost-button"
-                    onClick={() => window.desktop.openPath(selectedJob.result_path)}
-                  >
-                    Open result folder
-                  </button>
-                </div>
-                <label>
-                  Prompt preview
-                  <textarea readOnly rows={11} value={selectedJob.prompt_preview} />
-                </label>
-                <label>
-                  Add an answer or clarification
-                  <textarea
-                    rows={4}
-                    value={qaText}
-                    onChange={(event) => setQaText(event.target.value)}
-                    placeholder="Answer the agent's follow-up questions here, or add new guardrails before relaunching."
-                  />
-                </label>
-                <button className="primary-button" onClick={() => appendAnswer()}>
-                  Append to context
+                <button className="btn btn-ghost btn-sm" style={{ marginTop: 14 }}
+                  onClick={() => window.desktop?.openPath?.(state.finder_notes_path)}>
+                  Open recipe notes
                 </button>
-                {selectedJob.question_log?.length ? (
-                  <div className="qa-log">
-                    {selectedJob.question_log.map((entry, index) => (
-                      <article key={`${entry.timestamp}-${index}`} className="qa-entry">
-                        <strong>{entry.role}</strong>
-                        <p>{entry.content}</p>
-                      </article>
-                    ))}
-                  </div>
-                ) : null}
-              </section>
-            ) : null}
-          </aside>
-        </section>
+              </div>
+            </div>
+          </div>
+        )}
+
+        </div>
       </main>
+
+      {showTerminal && (
+        <div
+          className="terminal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowTerminal(false);
+          }}
+        >
+          <div
+            className="terminal-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="terminal-chrome">
+                <span className="terminal-title">Backend output</span>
+              <button
+                className="terminal-close"
+                onClick={() => setShowTerminal(false)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <div className="terminal-output-wrap">
+              <pre ref={terminalRef} className="terminal-body">
+                {terminalText || (
+                  <span className="terminal-empty">
+                    Backend stdout/stderr will appear here when the app runs.
+                  </span>
+                )}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

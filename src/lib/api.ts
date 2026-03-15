@@ -1,10 +1,14 @@
-import type { AppState } from "./types";
+import type { AppState, IntakeQuestion } from "./types";
 
 let cachedBaseUrl: string | null = null;
 
 async function baseUrl(): Promise<string> {
   if (!cachedBaseUrl) {
-    cachedBaseUrl = await window.desktop.getBackendUrl();
+    if (window.desktop?.getBackendUrl) {
+      cachedBaseUrl = await window.desktop.getBackendUrl();
+    } else {
+      cachedBaseUrl = "http://127.0.0.1:8765";
+    }
   }
   return cachedBaseUrl;
 }
@@ -34,12 +38,26 @@ export const api = {
     request("/projects", { method: "POST", body: JSON.stringify(body) }),
   createJob: (body: unknown) =>
     request("/jobs", { method: "POST", body: JSON.stringify(body) }),
-  launchJob: (jobId: string) =>
-    request(`/jobs/${jobId}/launch`, { method: "POST" }),
+  launchJob: (jobId: string, executor = "codex") =>
+    request(`/jobs/${jobId}/launch`, { method: "POST", body: JSON.stringify({ executor }) }),
   appendQa: (jobId: string, body: unknown) =>
     request(`/jobs/${jobId}/qa`, { method: "POST", body: JSON.stringify(body) }),
+  jobLogs: (jobId: string) =>
+    request<{ log: string }>(`/jobs/${jobId}/logs`),
+  jobQuestions: (jobId: string) =>
+    request<{ questions: string }>(`/jobs/${jobId}/questions`),
   createUpdateDefinition: (body: unknown) =>
     request("/update-definitions", { method: "POST", body: JSON.stringify(body) }),
   runUpdateDefinition: (definitionId: string) =>
-    request(`/update-definitions/${definitionId}/run`, { method: "POST" })
+    request(`/update-definitions/${definitionId}/run`, { method: "POST" }),
+  getSettings: () =>
+    request<{ api_key_set: boolean; executor: string }>("/settings"),
+  saveSettings: (body: unknown) =>
+    request("/settings", { method: "POST", body: JSON.stringify(body) }),
+  runFinder: (body: unknown) =>
+    request<{ recipe_id: string; status: string }>("/finder/run", { method: "POST", body: JSON.stringify(body) }),
+  finderLog: (recipeId: string) =>
+    request<{ log: string; status: string }>(`/finder/${recipeId}/log`),
+  intakeQuestions: (body: unknown) =>
+    request<{ questions: IntakeQuestion[] }>("/intake/questions", { method: "POST", body: JSON.stringify(body) }),
 };

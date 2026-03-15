@@ -1,0 +1,562 @@
+=== PAGE 1 ===
+UBS
+Global Research
+23 February 2026
+Broadcom Inc.
+Thinking Through SOTP Amid Software Deep
+Dive + EPS Preview
+Summary
+On the heels of our recent TPU-driven estimate increase and deeper dive into the
+customer-owned-tooling debate for the Al business, we shift our focus to the software
+business with a companion note from the UBS software team that highlights some
+potential risks to growth. The recent correction in software multiples has, we think, been
+a factor in AVGO's lagging stock performance. However, even adjusting for dis-
+synergies in a hypothetical SOTP, our analysis suggests that AVGO's semiconductor
+business is trading at 20x P/E, 23x EV/FCF, and 17x EV/EBITDA, all one turn more
+expensive than NVDA (and the broader peer set). In other words, we are hard-pressed to
+agree with prevailing investor sentiment that the semis business has become expensive
+At the same time, though, the companion note highlights some key emerging risks for
+the software business including 1) a potential increase in VMware customer churn in
+2026/2027 as 3-year deals come up for renewal, 2) potential growth headwinds as the
+VCF upsell is now being lapped, and 3) Al coding tools compressing code/app
+modernization timelines and pushing more on-prem workload to the cloud. Net, we feel
+like our assumption that AVGO's software business grows ~4-6% CAGR through 2029
+still accounts for these risks. Lastly, given some of these headwinds and the growth from
+the Al business, we believe the business synergy case for these two segments is less
+attractive than it has been over the past several years and compute remains a hole where
+AVGO could potentially allocate additional capital to fully flesh out its Al offerings
+Software and semis seem to be on diverging trajectories...
+VMware and the smaller software businesses alongside it have been thoroughly re-
+engineered with substantial price increases (with VCF offering 'more-for-more'
+compared to several disaggregated products under the old go-to-market strategy).
+Combined with dramatic cost cuts, this has propelled AVGO's software business to
+industry leading margins, but now sits atop a plateau with possible customer churn and
+competitive pressure ahead. At the same time, the Al business continues to accelerate
+with revenue set to triple this year to >560B in F2026 and ~$75B in C2026 with Al
+revenue set to reach ~$120B in C2027 - essentially achieving the maximum PSU
+threshold of ~1.8MM shares in the company's most recent CEO compensation
+agreement.
+...and we think the revenue synergy argument is weaker now than in 2023
+when VMW closed
+Highlights (U5$m)
+Revenues
+EBIT (UBS)
+Net earning» (UBS)
+EPS (UBS, diluted) (US$)
+DPS (net) (US$)
+Net (debt) / cash
+10/23
+35,819
+22,125
+18,378
+4.22
+1.84
+(25,040)
+10/24
+51,574
+30,736
+23,733
+4.87
+2.11
+(58,218)
+Equities
+United States
+Semiconductors
+12-month rating
+Buy
+12m price target
+US$475.00
+Price (23 Feb 2026)
+RIC: AVGO.O BEG: AVGO US
+Trading data and key matrics
+52-wk range
+Market cap.
+Shares o/a
+Free float
+Avg. daily volume ('000)
+Avg. daily value (m)
+Common s/h equity (10/26E)
+P/BV (10/26E)
+Net debt to EBITDA (10/26E)
+US$330.02
+US$412.97-146.29
+US$1,558b
+4,722m (COM)
+100%
+30,811
+US$10,720.1
+U5$111b
+14.3x
+0.3x
+EPS (UBS, diluted) (USD)
+Q1E
+Q2E
+Q3E
+Q4E
+10/26E
+10/27E
+10/28E
+10/26E
+UBS
+1.99
+2.18
+2.92
+3.96
+11.05
+16.68
+21.53
+Cons.
+2.02
+2.16
+2.87
+3.32
+10.16
+14.11
+17.46
+Timothy Arcuri
+Analyst
+timothy.arcuri@ubs.com
++1-415-352 5676
+Natalia Winkler, CFA
+natalia.winklen@ubs.com
++1-415-352 4626
+10/25
+63,887
+41,997
+33,728
+6.82
+2.36
+(48,958)
+10/26E
+105,803
+69,322
+55,619
+11.05
+2.60
+(18,344)
+10/27E
+155,499
+105,258
+85,517
+16.68
+3.90
+37,011
+10/28E
+200,160
+136,580
+112,498
+21.53
+5.38
+110,590
+Grant Joslin
+Analyst
+grant.joslin@ubs.com
++1-201-352 0442
+10/29E
+10/30E
+250,071
+294,764
+170,885
+201,252
+141,532
+167,240
+26.58
+30.82
+6.94
+8.96
+202,965
+311,475
+Profitability/valuation
+10/23
+EBIT (UB5) margin 9
+61.8
+ROIC (EBIT) %
+44.8
+EV/EBITDA (UBS core) x
+13.7
+P/E (UBS, diluted) x
+16.7
+Equity FCF (UBS) yield 96
+6.0
+Dividend yield (net) %
+2.6
+10/24
+59.6
+35.1
+20.5
+28.3
+3.1
+1.5
+s, LSEG Eikon
+Price of 695 326 Son 23 Fe-202603 52:16 E57
+UB5 estimates. Metrics maried as (UB 5)
+10/25
+65.7
+32.8
+27.6
+36.1
+2.3
+1.0
+10/26E
+65.5
+53.4
+22.8
+30.1
+3.2
+0.8
+10/27E
+67.7
+82.5
+15.1
+19.9
+5.4
+1.2
+ed analyst adjustments applied. Veluations: based on
+10/28E
+10/29E
+68.2
+68.3
+109.0
+135.7
+11.6
+9.3
+15.4
+12.5
+7.0
+8.8
+1.6
+2.1
+10/30E
+68.3
+157.6
+7.9
+10.8
+10.5
+2.7
+everage share price that year, (E): based on a share
+This report has been prepared by UBS Securities LLC. ANALYST CERTIFICATION AND REQUIRED DISCLOSURES, INCLUDING
+INFORMATION ON THE QUANTITATIVE RESEARCH REVIEW PUBLISHED BY UBS, BEGIN ON PAGE 16. UBS does and seeks to do
+business with companies covered in its research reports. As a result, investors should be aware that the firm may have a conflict of
+interest that could affect the objectivity of this report. Investors should consider this report as only a single factor in making their
+investment decision.
+
+
+=== PAGE 2 ===
+The growth of AVGO's semiconductor business has taken off due to Al - mostly ASICS
+but also networking. Most of this growth has come from hyperscalers and LLM
+developers - nearly all of whom are working with AVGO on custom ASIC programs to
+combat reliance on NVDA. The scope of the growth from these customers dwarfs what
+is happening at the enterprise level, dulling the argument for revenue synergies in the
+software business that really move the needle. It is true that software provides stable
+cash flows, but AVGO's growth is being held back more than ever by the software
+business, and compute remains a hole where AVGO could potentially allocate additional
+capital to fully flesh out its Al offerings (major ASIC customers like Google bring the vast
+majority of the compute IP to the ASIC engagement).
+Even with software multiple compression, we struggle to characterize AVGO's
+semis business as expensive
+AVGO has been flattish YTD against a backdrop of the SOX returning +15% and
+software -27% as the software vertical has now lost its long-term valuation premium to
+the broader stock market (Figure 6). We update and revise our infrastructure software
+peers for AVGO's software business, and we show pro forma software vs semiconductor
+valuations (Figure 4). For this analysis, we burden a standalone software business with ~
+$1B in cost dis-synergies - a number that we think is reasonable considering the $4B of
+cost savings executed at the time of the merger but yet sufficient for some reinvestment
+in R&D and - $250MM of public company costs. Backing out software EBITDA, P/E, and
+FCF at the 12x, 19x, and 12x 2027 multiples of AVGO's software peers (see Figure 5 for
+peer set), under these assumptions, the remaining semiconductor business currently
+trades at a very modest premium of ~5% (or 1x turn) in relation to key peers on C2027E
+Specifically, on EV/EBITDA the implied semiconductor valuation is ~ 17x '27E EBITDA (v5
+peers at ~ 16x), ~20x P/E (v5 peers at ~ 19x), and ~ 23x EV/FCF (v5 peers at ~ 22x). In other
+words, by any of these metrics, AVGO is trading just about one turn above its peer set
+and certainly not misaligned with core peers like NVDA.
+FQ1:26 (Jan) earnings preview (reports 3/4); visibility on GM impact from
+Anthropic racks is the key Q
+Given inflecting TPU units, we see AVGO's $8.2B Al revenue guidance for FQ1 as
+conservative and also see Street ~ $9.3B for FQ2 as a few hundred millions low too. For
+the non Al businesses, we view the -10% guidance as also a bit conservative even
+accounting for normal seasonal weakness across wireless, broadband, and industrial.
+We model Software down ~2% Q/Q, in line with guidance, as post-VMware customer
+transitions approach the tail end and growth decelerates versus the past two years. Into
+Apr Q, We expect ongoing TPU momentum (as outlined in our recent note) and Al
+networking strength with Al revenues at ~59.7B (Street ~$9.3B). Combined with
+seasonal recovery in non-Al semis we see AVGO guiding revenue at least to our ~ $20.8B
+estimate - considerably above Street estimates. We see AVGO shipping ~3.7MM TPUS In
+C2026, reflecting strength in the GCP program and incremental demand from
+Anthropic (and potentially META as its ASIC program has we think been slow to really
+reach critical mass). We believe the most important thing for the company to address on
+this call is the margin impact from the Anthropic racks starting to ship in FQ3. The good
+news is that even assuming these rack shipments are a ~500bps headwind to GM
+between FQ1 and FQ4 of this year, we still see Street EPS as considerably too low - but
+we think it would be beneficial for the company to provide some more color around how
+to model this to remove some of the overhang for investors. Net, we maintain our C26/
+C27 revenue estimates of $106B/$155B (9%/13% above consensus) and EPS of ~$11/
+$17, reiterate our Buy rating, and maintain our $475 price target.
+nly Fo
+Broadcom Inc. 23 February 2026
+#SUBS 2
+
+
+=== PAGE 3 ===
+Broadcom Inc.
+Figure 1: Semis and Software C2027E multiples
+23.2x
+20.0x
+18.6x19.0x
+20.1x
+16.8x
+15.5x
+12.0x
+12.0x
+EV/EBITDA
+P/E
+EV/FCF
+•Total Company MAVGO Software (Assumed) •AVGO Semis (Implied)
+Source: Company reports, UBS research
+Internal Wel
+Figure 3: Broadcom Software/Semis EBITDA, EPS, and
+FCF Allocation
+100%
+75%
+Semis
+$85.5B
+Semis
+$13.36
+Semis
+$63.9B
+50%
+25%
+Software
+$29.4B
+Software
+$3.61
+Software
+$24.58
+0%
+Adj. EBITDA
+EPS
+FCF
+Source: Company reports, UBS research
+UBS Research
+Figure 2: Broadcom implied semis ex-software C2027E
+multiples vs peers
+23.2x
+21.6x22.0x
+20.0x19.2x19.0x
+16.8x16.2x16.0x
+EV/EBITDA
+P/E
+«EV/FCF
+•AVGO ex-Software
+INVDA
+• Median
+Source: Company reports, UBS research
+[VisionAlpha] Only For Internal Web Viev
+(Vis
+soni
+[VisionAlpha] Only Fo
+View, Do Not Share Or Transfer [VisionAlpha]
+[VisionAlpha] Only For Internal Web View, Do Not Share Or Transfer [VisionAlpha]
+(VisionAlpha) Only Fo
+Or Transfer [VisionAlpha]
+Broadcom Inc.
+23
+February 2026
+Gow. Do Not Sha
+Or Transfer [VisionAlpha]|
+#UBS
+3
+
+
+=== PAGE 4 ===
+Figure 4: Broadcom SoTP - Semis-implied multiples
+C2027. SMs excluding per share amounts
+EV/EBITDA
+Total Company Valuation
+Share price
+Share count
+P/E
+Total Company Valuation
+Share price
+EPS
+Equity Value
+Net Debt
+Enterprise Value
+Adj. EBITDA
+EV/EBITDA
+$335.22
+5,188
+1,738,981
+37,011
+1,775,992
+114,825
+15.5x
+Total Co P/E
+$335.22
+$18.05
+18.6x
+Software only
+Revenue
+Op Mgn
+EBITDA
+Dissynergy
+EBITDA post-dissynergy
+EV/EBITDA
+Implied Software EV
+Net debt
+Equity value
+Share count
+Value per AVGO share
+Implied ex-Software
+Total Enterprise Value
+less Software
+Implied Semi Enter. Value
+Total Co EBITDA
+Less Software
+Semi EBITDA
+Software only
+Revenue
+30,463
+23,761
+78%
+Op Mgn
+30,463
+23,761
+78%
+29,361
+(1,000)
+Dissynergy
+O1 post dissynergy
+28,361
+OlE
+12.0x
+Taxes
+Net income
+(1,000)
+22,761
+(340)
+(3,699)
+18,722
+340,333
+(6,800)
+333,533
+5,188
+64
+Share count
+Software only EPS
+P/E
+Value per AVGO share
+5,188
+3.61
+19.0x
+69
+1,775,992
+(340,333)
+1,435,659
+114,825
+(29,361)
+85,464
+Implied ex-Software
+Total Share price
+less Software
+Implied Semi value
+Semi only NI
+Total EBITDA
+less Software
+Semi EBITDA
+5
+335
+(69)
+267
+Implied Semi EV/EBITDA
+16.8x
+OLE
+Taxes
+Semi NI
+Share Count
+Semi only EPS
+Implied Semi P/E
+Peer EV/EBITDA
+Discount/Premium
+Source: Company reports, UBS research, Factset
+16.0x
++5%
+Peer P/E
+Discount/Premium
+114,825
+(29,361)
+85,464
+(2,474)
+(13,693)
+69,297
+5,188
+$ 13.36
+20.0x
+19.0x
++5%
+EV/FCF
+Total Company Valuation
+Share price
+Share count
+Equity Value
+Net Debt
+Enterprise Value
+$335.22
+5,188
+1,738,981
+37,011
+1.775,992
+FCF
+EV/FCF
+88,441
+20.1x
+Software only
+EBITDA
+Dissynergy
+Cash interest
+Cash taxes
+Working capital
+CFFO
+Capex
+FCF
+EV/FCF
+Implied Software EV
+Net debt
+Equity value
+Share count
+Value per AVGO share
+29,361
+(1,000)
+(340)
+(4,623)
+1,500
+24,898
+(400)
+24,498
+12.0x
+293,972
+(6,800)
+287,172
+5,188
+55
+Implied ex-Software
+Total Enterprise Value
+less Software
+Implied Semi Enter. Value
+Total co FCF
+Less Software
+Semi FCF
+1,775,992
+(293,972)
+1,482,020
+88,441
+(24,498)
+63,944
+Implied Semi EV/FCF
+Peer EV/FCF
+Discount/Premium
+23.2x
+22.0x
++5%
+Broadcom Inc. 23 February 2026
+#UBS 4
+

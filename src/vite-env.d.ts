@@ -8,6 +8,7 @@ interface DesktopBridge {
     title?: string;
   }) => Promise<string[]>;
   openPath: (path: string) => Promise<string>;
+   getBackendLog: () => Promise<string>;
 }
 
 declare global {
