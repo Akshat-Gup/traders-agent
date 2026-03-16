@@ -53,6 +53,7 @@ export interface JobRecord {
   template_id?: string | null;
   cadence?: string | null;
   question_log?: { role: string; content: string; timestamp: string }[];
+  source_paths?: string[];
 }
 
 export interface IntakeOption {

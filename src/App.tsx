@@ -17,6 +17,7 @@ import {
   Paperclip,
   PieChart,
   Plug,
+  Send,
   TrendingUp,
   X,
   Zap,
@@ -850,10 +851,19 @@ function App() {
     );
   }
 
+  function renderInlineText(text: string): ReactNode[] {
+    const parts = text.split(/(`[^`]+`)/g);
+    return parts.map((part, i) =>
+      part.startsWith("`") && part.endsWith("`") && part.length > 2
+        ? <code key={i} className="assistant-inline-code">{part.slice(1, -1)}</code>
+        : part
+    );
+  }
+
   function renderAssistantContent(text: string, emptyCopy: string) {
     const normalized = text.replace(/\r\n/g, "\n").trim();
     if (!normalized) {
-      return <div className="session-empty">{emptyCopy}</div>;
+      return <p className="jv-stream-empty">{emptyCopy}</p>;
     }
 
     const blocks = normalized
@@ -881,7 +891,7 @@ function App() {
             return (
               <ul className="assistant-stream-list" key={index}>
                 {lines.map((line, lineIndex) => (
-                  <li key={lineIndex}>{line.replace(/^[-*]\s+/, "")}</li>
+                  <li key={lineIndex}>{renderInlineText(line.replace(/^[-*]\s+/, ""))}</li>
                 ))}
               </ul>
             );
@@ -891,7 +901,7 @@ function App() {
             return (
               <ol className="assistant-stream-list assistant-stream-list-numbered" key={index}>
                 {lines.map((line, lineIndex) => (
-                  <li key={lineIndex}>{line.replace(/^\d+\.\s+/, "")}</li>
+                  <li key={lineIndex}>{renderInlineText(line.replace(/^\d+\.\s+/, ""))}</li>
                 ))}
               </ol>
             );
@@ -899,7 +909,7 @@ function App() {
 
           return (
             <p className="assistant-stream-paragraph" key={index}>
-              {lines.join(" ")}
+              {renderInlineText(lines.join(" "))}
             </p>
           );
         })}
@@ -1276,18 +1286,11 @@ function App() {
   function renderJobRunning() {
     if (!selectedJob) return null;
     const session = selectedSession;
-    const outputs = jobArtifacts[selectedJob.id] || [];
-    const activeStream =
-      monitorTab === "assistant" ? session?.agentText : monitorTab === "commands" ? session?.commandOutput : "";
-    const streamEmptyCopy =
-      monitorTab === "assistant"
-        ? "Codex assistant updates will stream here as the run progresses."
-        : monitorTab === "commands"
-        ? "Commands executed by Codex will stream here."
-        : "File changes will appear here after Codex edits or creates files.";
+    const contextFiles = selectedJob.source_paths || [];
+    const hasApprovals = (session?.approvals || []).length > 0;
 
     return (
-      <div className="job-companion-view">
+      <div className="jv-shell">
         <div className="detail-breadcrumb">
           <button
             className="back-icon-btn"
@@ -1297,123 +1300,124 @@ function App() {
             <ArrowLeft size={15} strokeWidth={2.2} />
           </button>
           <span className="breadcrumb-divider">/</span>
-          <h2 className="breadcrumb-current">{activeProject?.name}</h2>
+          <h2 className="breadcrumb-current">{selectedJob.title || activeProject?.name}</h2>
         </div>
 
-        <div className="run-monitor-grid">
-          <div className="run-monitor-main">
-            <div className="run-monitor-stream-card">
-              <div className="run-monitor-stream-header">
-                <div className="run-monitor-tabs">
-                  {[
-                    { id: "assistant", label: "Assistant" },
-                    { id: "commands", label: "Commands" },
-                    { id: "files", label: "Changes" },
-                  ].map((item) => (
-                    <button
-                      key={item.id}
-                      className={`run-monitor-tab ${monitorTab === item.id ? "is-active" : ""}`}
-                      onClick={() => setMonitorTab(item.id as "assistant" | "commands" | "files")}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {monitorTab === "files" ? (
-                session?.fileChanges.length ? (
-                  <div className="file-change-list">
-                    {session.fileChanges.map((change, index) => (
-                      <div className="file-change-card" key={`${change.path}-${index}`}>
-                        <div className="file-change-header">
-                          <strong>{change.path}</strong>
-                          <span>{change.kind.type}</span>
-                        </div>
-                        {change.kind.move_path && <p>Moved to {change.kind.move_path}</p>}
-                        {change.diff && <pre className="job-log file-change-diff">{trimDiff(change.diff)}</pre>}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="session-empty">{streamEmptyCopy}</div>
-                )
-              ) : monitorTab === "assistant" ? (
-                renderAssistantContent(activeStream || "", streamEmptyCopy)
-              ) : (
-                <pre ref={commandLogRef} className="job-companion-log">
-                  {activeStream || <span className="job-companion-log-empty">{streamEmptyCopy}</span>}
-                </pre>
+        <div className="jv-body">
+          {/* ── Left: stream + reply ── */}
+          <div className="jv-main">
+            <div className="jv-stream-wrap">
+              {renderAssistantContent(
+                session?.agentText || "",
+                "Assistant updates will stream here as the run progresses."
               )}
             </div>
 
-            <div className="run-monitor-output-card">
-              <div className="run-monitor-section-head">
-                <strong>Outputs</strong>
-                <button className="btn btn-ghost btn-sm" onClick={() => refreshArtifacts(selectedJob.id).catch(() => {})}>
-                  Refresh
+            {/* Reply bar */}
+            <div className="jv-reply">
+              <div className="jv-reply-inner">
+                <textarea
+                  className="jv-reply-textarea"
+                  rows={1}
+                  value={qaText}
+                  onChange={(e) => setQaText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                      e.preventDefault();
+                      if (qaText.trim() && !busy) appendAnswer();
+                    }
+                  }}
+                  placeholder="Reply or add instructions…"
+                />
+                <button
+                  className="jv-reply-send"
+                  disabled={!!busy || !qaText.trim()}
+                  onClick={appendAnswer}
+                  title="Append & relaunch (⌘↵)"
+                >
+                  <Send size={14} strokeWidth={2.2} />
                 </button>
               </div>
-              <div className="run-monitor-actions">
-                <button className="btn btn-primary btn-sm" onClick={() => launchJob(selectedJob.id)}>
-                  {session?.running ? "Relaunch" : "Launch"}
-                </button>
-                <button className="btn btn-ghost btn-sm" onClick={() => window.desktop?.openPath?.(selectedJob.result_path)}>
-                  Open results
-                </button>
-                <button className="btn btn-ghost btn-sm" onClick={() => window.desktop?.openPath?.(selectedJob.workspace_path)}>
-                  Open workspace
-                </button>
-                <button className="btn btn-ghost btn-sm" onClick={() => setResearchScreen("project-detail")}>
-                  Back to project
-                </button>
-              </div>
-              {renderOutputs(
-                selectedJob.id,
-                session?.running ? "Waiting for deliverables to land in result/." : "No deliverables found in result/ yet."
-              )}
             </div>
           </div>
 
-          <div className="run-monitor-side">
-            <div className="run-monitor-side-card">
-              <div className="run-monitor-section-head">
-                <strong>Pending approvals</strong>
-              </div>
-              {renderApprovalList(session?.approvals || [])}
-            </div>
-
-            {session?.lastError ? <div className="session-error">{session.lastError}</div> : null}
-
-            <div className="run-monitor-side-card">
-              <div className="run-monitor-section-head">
-                <strong>Context</strong>
-              </div>
-              {selectedJob.question_log?.length ? (
-                <div className="qa-log">
-                  {selectedJob.question_log.slice(-4).map((entry, index) => (
-                    <div className="qa-entry" key={`${entry.timestamp}-${index}`}>
-                      <strong>{entry.role}</strong>
-                      <p>{entry.content}</p>
-                    </div>
-                  ))}
+          {/* ── Right: outputs + context ── */}
+          <div className="jv-side">
+            {/* Pending approvals — only when present */}
+            {hasApprovals && (
+              <div className="jv-panel">
+                <div className="jv-panel-head">
+                  <span>Pending approvals</span>
                 </div>
-              ) : (
-                <div className="session-empty">No added context yet.</div>
-              )}
-              <label className="dj-label">
-                Answer / add context
-                <textarea
-                  rows={3}
-                  value={qaText}
-                  onChange={(e) => setQaText(e.target.value)}
-                  placeholder="Answer questions or add instructions for Codex…"
-                />
-              </label>
-              <button className="btn btn-primary btn-sm" onClick={appendAnswer} disabled={!!busy || !qaText.trim()}>
-                Append &amp; relaunch
-              </button>
+                <div className="jv-panel-body">
+                  {renderApprovalList(session?.approvals || [])}
+                </div>
+              </div>
+            )}
+
+            {session?.lastError && (
+              <div className="session-error">{session.lastError}</div>
+            )}
+
+            {/* Outputs */}
+            <div className="jv-panel jv-panel-grow">
+              <div className="jv-panel-head">
+                <span>Outputs</span>
+                <div className="jv-panel-head-actions">
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => refreshArtifacts(selectedJob.id).catch(() => {})}
+                  >
+                    Refresh
+                  </button>
+                </div>
+              </div>
+              <div className="jv-panel-body">
+                <div className="jv-output-actions">
+                  <button className="btn btn-primary btn-sm" onClick={() => launchJob(selectedJob.id)}>
+                    {session?.running ? "Relaunch" : "Launch"}
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => window.desktop?.openPath?.(selectedJob.result_path)}>
+                    Open results
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => window.desktop?.openPath?.(selectedJob.workspace_path)}>
+                    Open workspace
+                  </button>
+                </div>
+                {renderOutputs(
+                  selectedJob.id,
+                  session?.running ? "Waiting for deliverables…" : "No deliverables yet."
+                )}
+              </div>
             </div>
+
+            {/* Context files — only when attached */}
+            {contextFiles.length > 0 && (
+              <div className="jv-panel">
+                <div className="jv-panel-head">
+                  <span>Context</span>
+                  <span className="jv-panel-count">{contextFiles.length}</span>
+                </div>
+                <div className="jv-panel-body">
+                  <div className="jv-context-list">
+                    {contextFiles.map((filePath) => {
+                      const name = filePath.split("/").pop() || filePath;
+                      return (
+                        <button
+                          key={filePath}
+                          className="jv-context-file"
+                          onClick={() => window.desktop?.openPath?.(filePath)}
+                          title={filePath}
+                        >
+                          <FileText size={13} strokeWidth={2} className="jv-context-file-icon" />
+                          <span>{name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
