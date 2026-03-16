@@ -11,10 +11,10 @@ The legacy reference assets for the finance-report pipeline now live under `mark
 
 All of the paths below are relative to `market_workbench/`.
 
-- `scripts/generate_broadcom_report.py`
+- `scripts/legacy/generate_broadcom_report.py`
   - Main legacy example for the handcrafted Broadcom report pipeline.
-- `scripts/generate_broadcom_report_v1.py`
-- `scripts/generate_broadcom_report_v2.py`
+- `scripts/legacy/generate_broadcom_report_v1.py`
+- `scripts/legacy/generate_broadcom_report_v2.py`
   - Earlier iterations of the same report-assembly workflow.
 - `report/`
   - Uploaded broker PDFs and source research reports used as example inputs.

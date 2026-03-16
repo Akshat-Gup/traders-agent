@@ -22,7 +22,7 @@ Local-first desktop workbench for:
 npm install
 ```
 
-2. Optional PDF text extraction dependency:
+2. Install the Python research runtime dependencies:
 
 ```bash
 python3 -m pip install -r backend/requirements.txt
@@ -42,8 +42,10 @@ The Electron process will also boot the local Python service automatically.
 - register templates
 - prepare research/update/finder workspaces
 - stage source files and URLs into local folders
+- extract PDF text and page images into the research workspace
+- stage an executable Python report template plus equity research reference files
 - generate prompt/context files
-- launch Codex locally with workspace-scoped context and web search enabled
+- launch Codex locally through the app-server flow
 - append follow-up answers into a job context
 
 ## Notes

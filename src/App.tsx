@@ -23,7 +23,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { api } from "./lib/api";
-import type { AppState, IntakeQuestion, JobKind } from "./lib/types";
+import type { AppState, IntakeQuestion, JobKind, JobRecord } from "./lib/types";
 import logoSrc from "./logo.jpg";
 
 const PROJECT_ICONS: LucideIcon[] = [
@@ -51,10 +51,57 @@ function projectIcon(id: string): LucideIcon {
 type TabKey = "automation" | "finder" | "research";
 type ResearchScreen = "projects" | "project-detail" | "job-running";
 
+type CodexAccount = {
+  account: { type: string; email?: string; planType?: string } | null;
+  requiresOpenaiAuth: boolean;
+  authMode: string | null;
+};
+
+type CodexApproval = {
+  requestId: number;
+  method: string;
+  itemId: string;
+  threadId: string;
+  turnId: string;
+  reason?: string | null;
+  command?: string | null;
+  cwd?: string | null;
+  grantRoot?: string | null;
+};
+
+type CodexFileChange = {
+  path: string;
+  kind: { type: string; move_path?: string | null };
+  diff: string;
+};
+
+type CodexSession = {
+  jobId: string;
+  threadId: string | null;
+  activeTurnId: string | null;
+  codexStatus: string;
+  lastEventAt: string | null;
+  agentText: string;
+  commandOutput: string;
+  fileChanges: CodexFileChange[];
+  approvals: CodexApproval[];
+  lastError: string | null;
+  running: boolean;
+};
+
+type JobArtifact = {
+  name: string;
+  path: string;
+  relativePath: string;
+  kind: "file" | "directory";
+  size: number;
+  modifiedAt: string;
+};
+
 const EMPTY_STATE: AppState = {
   data_root: "",
   finder_notes_path: "",
-  executor_name: "Codex CLI",
+  executor_name: "Codex App Server",
   executor_available: false,
   templates: [],
   projects: [],
@@ -117,10 +164,10 @@ const TEMPLATE_CARDS = [
   },
   {
     id: "tmpl_builtin_equity_full",
-    label: "Full Pipeline",
-    desc: "PDF → 5 charts → DCF Excel + comps → DOCX report. Two output files: report.docx + valuation.xlsx",
+    label: "Research Test Template",
+    desc: "Executable Python template for source-backed research reports. Supports DOCX or PDF, with valuation.xlsx added when valuation is enabled.",
     family: "equity-research",
-    outputs: ["DOCX", "XLSX"],
+    outputs: ["DOCX", "PDF"],
     badge: "test",
   },
 ];
@@ -151,6 +198,71 @@ function csvToList(value: string) {
   return value.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
+function formatAccountTitle(account: CodexAccount | null) {
+  return account?.account?.email || "Codex not connected";
+}
+
+function formatAccountSubtitle(account: CodexAccount | null) {
+  if (!account?.account) return "Uses your local Codex sign-in";
+  if (account.account.type === "chatgpt") {
+    return account.account.planType
+      ? `ChatGPT ${account.account.planType} via local Codex`
+      : "ChatGPT via local Codex";
+  }
+  if (account.account.type === "apiKey") return "Local Codex API session";
+  return "Connected through local Codex";
+}
+
+function buildSessionFromJob(job: JobRecord | null): CodexSession | null {
+  if (!job) return null;
+  return {
+    jobId: job.id,
+    threadId: job.thread_id || null,
+    activeTurnId: job.active_turn_id || null,
+    codexStatus: job.codex_status || "idle",
+    lastEventAt: job.last_event_at || null,
+    agentText: job.last_agent_text || "",
+    commandOutput: job.last_command_output || "",
+    fileChanges: [],
+    approvals: [],
+    lastError: null,
+    running: job.status === "agent_running",
+  };
+}
+
+function deriveJobStatus(job: JobRecord, session: CodexSession | null) {
+  if (!session) return job.status;
+  if (session.running || session.codexStatus === "waiting-on-approval") return "agent_running";
+  if (session.codexStatus === "completed") return "done";
+  if (session.codexStatus === "failed" || session.lastError) return "error";
+  return job.status;
+}
+
+function sessionStatusLabel(job: JobRecord, session: CodexSession | null) {
+  if (!session) return job.status;
+  if (session.running) return session.codexStatus === "waiting-on-approval" ? "waiting-on-approval" : "running";
+  if (session.codexStatus && session.codexStatus !== "idle") return session.codexStatus;
+  return job.status;
+}
+
+function trimDiff(diff: string) {
+  if (diff.length <= 2000) return diff;
+  return `${diff.slice(0, 2000)}\n…`;
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatTimestamp(value: string | null | undefined) {
+  if (!value) return "Waiting for activity";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
+}
+
 function App() {
   const [tab, setTab] = useState<TabKey>("research");
   const [showNewAutomation, setShowNewAutomation] = useState(false);
@@ -161,6 +273,10 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [showTerminal, setShowTerminal] = useState(false);
   const [terminalText, setTerminalText] = useState("");
+  const [account, setAccount] = useState<CodexAccount | null>(null);
+  const [sessions, setSessions] = useState<Record<string, CodexSession>>({});
+  const [jobArtifacts, setJobArtifacts] = useState<Record<string, JobArtifact[]>>({});
+  const [monitorTab, setMonitorTab] = useState<"assistant" | "commands" | "files">("assistant");
   const terminalRef = useRef<HTMLPreElement>(null);
 
   // Research tab state machine
@@ -192,13 +308,15 @@ function App() {
   const [intakeQuestions, setIntakeQuestions] = useState<IntakeQuestion[]>([]);
   const [intakeAnswers, setIntakeAnswers] = useState<Record<string, string[]>>({});
 
-  const [executor, setExecutor] = useState<"codex" | "claude">("codex");
+  const executor = "codex" as const;
   const [activeJobLog, setActiveJobLog] = useState("");
   const [activeJobQuestions, setActiveJobQuestions] = useState("");
   const chatRef = useRef<HTMLTextAreaElement>(null);
   const connectorsRef = useRef<HTMLDivElement>(null);
   const formatPickerRef = useRef<HTMLDivElement>(null);
   const jobLogRef = useRef<HTMLPreElement>(null);
+  const agentLogRef = useRef<HTMLDivElement>(null);
+  const commandLogRef = useRef<HTMLPreElement>(null);
 
   // Update definition form
   const [updateForm, setUpdateForm] = useState({
@@ -220,15 +338,32 @@ function App() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [selectedAutomationId, setSelectedAutomationId] = useState<string | null>(null);
   const [qaText, setQaText] = useState("");
+  const autoOpenedJobsRef = useRef<Set<string>>(new Set());
   const selectedJob = useMemo(
     () => state.jobs.find((j) => j.id === selectedJobId) || null,
     [selectedJobId, state.jobs]
+  );
+  const selectedSession = useMemo(
+    () => sessions[selectedJobId || ""] || buildSessionFromJob(selectedJob),
+    [selectedJob, selectedJobId, sessions]
   );
 
   const activeProject = useMemo(
     () => state.projects.find((p) => p.id === activeProjectId) || null,
     [activeProjectId, state.projects]
   );
+
+  const selectedTemplateCard = useMemo(
+    () => TEMPLATE_CARDS.find((card) => card.id === selectedTemplate) || null,
+    [selectedTemplate]
+  );
+
+  const allowedFormatValues = useMemo(() => {
+    if (!selectedTemplateCard) {
+      return FORMAT_OPTIONS.map((option) => option.value);
+    }
+    return selectedTemplateCard.outputs.map((output) => output.toLowerCase());
+  }, [selectedTemplateCard]);
 
   const projectJobs = useMemo(
     () => state.jobs.filter((j) => (j as any).project_id === activeProjectId),
@@ -260,7 +395,65 @@ function App() {
     }
   }
 
-  useEffect(() => { refreshState(); }, []);
+  async function refreshAccount() {
+    if (!window.desktop?.codex?.getAccount) return;
+    try {
+      const nextAccount = await window.desktop.codex.getAccount();
+      setAccount(nextAccount);
+    } catch (e) {
+      setAccount(null);
+      setError(e instanceof Error ? e.message : "Unable to load Codex account");
+    }
+  }
+
+  async function refreshSession(jobId: string | null) {
+    if (!jobId || !window.desktop?.codex?.getSession) return;
+    try {
+      const session = await window.desktop.codex.getSession(jobId);
+      setSessions((current) => ({ ...current, [jobId]: session }));
+    } catch {
+      // Ignore jobs that have not started a Codex thread yet.
+    }
+  }
+
+  async function refreshArtifacts(jobId: string | null) {
+    if (!jobId || !window.desktop?.listJobOutputs) return;
+    try {
+      const files = await window.desktop.listJobOutputs(jobId);
+      setJobArtifacts((current) => ({
+        ...current,
+        [jobId]: files.filter((file) => file.kind === "file"),
+      }));
+    } catch {
+      // Ignore empty result folders.
+    }
+  }
+
+  function mergeSessionIntoJobs(jobId: string, session: CodexSession) {
+    setState((current) => ({
+      ...current,
+      jobs: current.jobs.map((job) =>
+        job.id !== jobId
+          ? job
+          : {
+              ...job,
+              thread_id: session.threadId,
+              active_turn_id: session.activeTurnId,
+              codex_status: session.codexStatus,
+              last_event_at: session.lastEventAt,
+              approval_pending: session.approvals.length > 0,
+              last_agent_text: session.agentText,
+              last_command_output: session.commandOutput,
+              status: deriveJobStatus(job, session),
+            }
+      ),
+    }));
+  }
+
+  useEffect(() => {
+    refreshState();
+    refreshAccount();
+  }, []);
 
   async function withBusy(label: string, fn: () => Promise<void>) {
     setBusy(label);
@@ -302,6 +495,18 @@ function App() {
   }, [terminalText]);
 
   useEffect(() => {
+    if (agentLogRef.current) {
+      agentLogRef.current.scrollTop = agentLogRef.current.scrollHeight;
+    }
+  }, [selectedSession?.agentText, monitorTab]);
+
+  useEffect(() => {
+    if (commandLogRef.current) {
+      commandLogRef.current.scrollTop = commandLogRef.current.scrollHeight;
+    }
+  }, [selectedSession?.commandOutput, monitorTab]);
+
+  useEffect(() => {
     function handleOutsideClick(e: MouseEvent) {
       if (connectorsRef.current && !connectorsRef.current.contains(e.target as Node)) {
         setShowConnectors(false);
@@ -312,6 +517,35 @@ function App() {
     }
     document.addEventListener("mousedown", handleOutsideClick);
     return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  useEffect(() => {
+    if (!window.desktop?.codex?.subscribe) return;
+    const unsubscribe = window.desktop.codex.subscribe((payload) => {
+      const event = payload as
+        | { type: "account"; account: CodexAccount }
+        | { type: "session"; jobId: string; session: CodexSession }
+        | { type: "server-exit"; log: string };
+
+      if (event.type === "account") {
+        setAccount(event.account);
+        return;
+      }
+
+      if (event.type === "session") {
+        setSessions((current) => ({ ...current, [event.jobId]: event.session }));
+        mergeSessionIntoJobs(event.jobId, event.session);
+        if (!event.session.running || event.session.fileChanges.length > 0) {
+          refreshArtifacts(event.jobId).catch(() => {});
+        }
+        return;
+      }
+
+      if (event.type === "server-exit") {
+        setTerminalText(event.log);
+      }
+    });
+    return unsubscribe;
   }, []);
 
 
@@ -365,6 +599,37 @@ function App() {
     const id = setInterval(() => { refreshState(); }, 3000);
     return () => clearInterval(id);
   }, [researchScreen, selectedJob?.id, selectedJob?.status]);
+
+  useEffect(() => {
+    if (!selectedJobId) return;
+    refreshSession(selectedJobId);
+    refreshArtifacts(selectedJobId);
+  }, [selectedJobId]);
+
+  useEffect(() => {
+    if (!allowedFormatValues.includes(jobOutputFormat)) {
+      setJobOutputFormat(allowedFormatValues[0] || "pdf");
+    }
+  }, [allowedFormatValues, jobOutputFormat]);
+
+  useEffect(() => {
+    if (!selectedJob) return;
+    const outputs = (jobArtifacts[selectedJob.id] || []).slice().sort((a, b) => {
+      const score = (entry: JobArtifact) => {
+        const lower = entry.name.toLowerCase();
+        if (lower.endsWith(".docx")) return 0;
+        if (lower.endsWith(".pdf")) return 1;
+        if (lower.endsWith(".xlsx")) return 2;
+        return 3;
+      };
+      return score(a) - score(b);
+    });
+    if (selectedJob.status !== "done" || outputs.length === 0) return;
+    if (autoOpenedJobsRef.current.has(selectedJob.id)) return;
+    autoOpenedJobsRef.current.add(selectedJob.id);
+    outputs.slice(0, 2).forEach((output) => window.desktop?.openPath?.(output.path));
+    setMessage("Opened the generated outputs.");
+  }, [jobArtifacts, selectedJob]);
 
   // Finder recipe log polling
   useEffect(() => {
@@ -430,7 +695,7 @@ function App() {
   async function submitResearchJob(e: FormEvent) {
     e.preventDefault();
     if (!chatMsg.trim() && !jobSources.length) return;
-    const tpl = TEMPLATE_CARDS.find((t) => t.id === selectedTemplate);
+    const tpl = selectedTemplateCard;
     await withBusy("Launching…", async () => {
       const job = await api.createJob({
         kind: "research" as JobKind,
@@ -451,15 +716,15 @@ function App() {
       });
       const jobId = (job as any).id as string;
       setSelectedJobId(jobId);
-      // Auto-launch immediately — opens Terminal.app window + streams log
       await api.launchJob(jobId, executor);
+      await refreshSession(jobId);
+      await refreshArtifacts(jobId);
       setChatMsg("");
       setJobSources([]);
-      // Bring the Terminal.app window to front
-      window.desktop?.focusTerminal?.();
-      // Switch to companion status view immediately, refresh state in background
+      setMonitorTab("assistant");
       setResearchScreen("job-running");
-      refreshState().catch(() => {});
+      setMessage(null);
+      await refreshState();
     });
   }
 
@@ -515,9 +780,17 @@ function App() {
   }
 
   async function launchJob(id: string) {
-    await withBusy(`Launching ${executor}`, async () => {
+    const job = state.jobs.find((entry) => entry.id === id) || null;
+    setSelectedJobId(id);
+    if (job?.kind === "research") {
+      setMonitorTab("assistant");
+      setResearchScreen("job-running");
+    }
+    await withBusy("Launching Codex", async () => {
       await api.launchJob(id, executor);
-      setMessage(`${executor} launched — logs streaming below.`);
+      await refreshSession(id);
+      await refreshArtifacts(id);
+      setMessage(null);
       await refreshState();
     });
   }
@@ -526,9 +799,133 @@ function App() {
     if (!selectedJob || !qaText.trim()) return;
     await withBusy("Appending", async () => {
       await api.appendQa(selectedJob.id, { content: qaText.trim() });
+      await api.launchJob(selectedJob.id, executor);
       setQaText("");
+      await refreshSession(selectedJob.id);
+      await refreshArtifacts(selectedJob.id);
+      setMonitorTab("assistant");
       await refreshState();
     });
+  }
+
+  async function respondToApproval(requestId: number, decision: string) {
+    if (!window.desktop?.codex?.respondToApproval || !selectedJob) return;
+    await withBusy("Sending approval", async () => {
+      await window.desktop.codex.respondToApproval(requestId, decision);
+      await refreshSession(selectedJob.id);
+      setMessage("Approval sent to Codex.");
+    });
+  }
+
+  async function connectCodex() {
+    if (!window.desktop?.codex?.login) return;
+    await withBusy("Connecting Codex", async () => {
+      await window.desktop.codex.login();
+      await refreshAccount();
+    });
+  }
+
+  function renderOutputs(jobId: string, emptyCopy: string) {
+    const outputs = jobArtifacts[jobId] || [];
+    if (outputs.length === 0) {
+      return <div className="session-empty">{emptyCopy}</div>;
+    }
+
+    return (
+      <div className="monitor-output-list">
+        {outputs.map((output) => (
+          <button key={output.path} className="monitor-output-card" onClick={() => window.desktop?.openPath?.(output.path)}>
+            <div className="monitor-output-card-top">
+              <strong>{output.name}</strong>
+              <span>{formatBytes(output.size)}</span>
+            </div>
+            <p>{output.relativePath}</p>
+            <div className="monitor-output-card-meta">
+              <span>{new Date(output.modifiedAt).toLocaleTimeString()}</span>
+              <span>Open file</span>
+            </div>
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  function renderAssistantContent(text: string, emptyCopy: string) {
+    const normalized = text.replace(/\r\n/g, "\n").trim();
+    if (!normalized) {
+      return <div className="session-empty">{emptyCopy}</div>;
+    }
+
+    const blocks = normalized
+      .split(/\n{2,}/)
+      .map((block) => block.trim())
+      .filter(Boolean);
+
+    return (
+      <div className="assistant-stream" ref={agentLogRef}>
+        {blocks.map((block, index) => {
+          const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+          const isBulletList = lines.length > 0 && lines.every((line) => /^[-*]\s+/.test(line));
+          const isNumberedList = lines.length > 0 && lines.every((line) => /^\d+\.\s+/.test(line));
+          const isCodeBlock = block.startsWith("```") && block.endsWith("```");
+
+          if (isCodeBlock) {
+            return (
+              <pre className="assistant-stream-code" key={index}>
+                {block.replace(/^```[^\n]*\n?/, "").replace(/\n?```$/, "")}
+              </pre>
+            );
+          }
+
+          if (isBulletList) {
+            return (
+              <ul className="assistant-stream-list" key={index}>
+                {lines.map((line, lineIndex) => (
+                  <li key={lineIndex}>{line.replace(/^[-*]\s+/, "")}</li>
+                ))}
+              </ul>
+            );
+          }
+
+          if (isNumberedList) {
+            return (
+              <ol className="assistant-stream-list assistant-stream-list-numbered" key={index}>
+                {lines.map((line, lineIndex) => (
+                  <li key={lineIndex}>{line.replace(/^\d+\.\s+/, "")}</li>
+                ))}
+              </ol>
+            );
+          }
+
+          return (
+            <p className="assistant-stream-paragraph" key={index}>
+              {lines.join(" ")}
+            </p>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function renderApprovalList(approvals: CodexApproval[]) {
+    if (!approvals.length) return <div className="session-empty">No approvals waiting right now.</div>;
+    return (
+      <div className="approval-list">
+        {approvals.map((approval) => (
+          <div className="approval-card" key={approval.requestId}>
+            <strong>{approval.method === "item/fileChange/requestApproval" ? "File change approval" : "Command approval"}</strong>
+            {approval.command && <pre className="dj-prompt">{approval.command}</pre>}
+            {approval.reason && <p>{approval.reason}</p>}
+            {approval.cwd && <p>CWD: {approval.cwd}</p>}
+            <div className="approval-actions">
+              <button className="btn btn-primary btn-sm" onClick={() => respondToApproval(approval.requestId, "accept")}>Accept</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => respondToApproval(approval.requestId, "decline")}>Decline</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => respondToApproval(approval.requestId, "cancel")}>Cancel turn</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
   }
 
   // ──────────────────────────────────────────────────────────
@@ -624,11 +1021,11 @@ function App() {
           </div>
         </div>
 
-        <div className={`detail-body${selectedJob ? " has-rail" : ""}`}>
+        <div className="detail-body">
           <div className="detail-main">
 
             {/* Chat + upload zone + templates — chatbar at vertical center */}
-            <div className={`chat-stage${jobSources.length > 0 ? " has-sources" : ""}`}>
+            <div className={`chat-stage${jobSources.length > 0 ? " has-sources" : ""}${projectJobs.length > 0 ? " has-jobs" : ""}`}>
               <div className="chat-stage-above" aria-hidden />
               <div className="chat-stage-center">
               {/* Chat bar */}
@@ -671,7 +1068,7 @@ function App() {
                         <span>Connectors</span>
                         <ChevronDown size={10} />
                       </button>
-                      {showConnectors && (
+                    {showConnectors && (
                         <div className="chat-dropdown conn-panel conn-dropdown-below">
                           <div className="conn-group">
                             <button type="button"
@@ -682,6 +1079,11 @@ function App() {
                               <span>Valuation</span>
                               <span className="conn-toggle-knob" />
                             </button>
+                            {valuationRequired && (
+                              <div className="conn-helper-copy">
+                                Valuation adds `valuation.xlsx` alongside the main report.
+                              </div>
+                            )}
                             {(["bloomberg", "refinitiv", "factset", "alpha_vantage"] as const).map(key => (
                               <button key={key} type="button"
                                 className={`conn-toggle-switch${enabledConnectors[key] ? " on" : ""}`}
@@ -723,7 +1125,7 @@ function App() {
                       </button>
                       {showFormatPicker && (
                         <div className="chat-dropdown chat-dropdown-sm">
-                          {FORMAT_OPTIONS.map((opt) => (
+                          {FORMAT_OPTIONS.filter((opt) => allowedFormatValues.includes(opt.value)).map((opt) => (
                             <button key={opt.value} type="button"
                               className={jobOutputFormat === opt.value ? "is-active" : ""}
                               onClick={() => { setJobOutputFormat(opt.value); setShowFormatPicker(false); }}>
@@ -838,82 +1240,34 @@ function App() {
             {projectJobs.length > 0 && (
               <div className="project-jobs">
                 <div className="section-label">Jobs</div>
-                {projectJobs.map((j) => (
-                  <div key={j.id}
-                    className={`pjob-row ${selectedJobId === j.id ? "is-active" : ""}`}
-                    onClick={() => setSelectedJobId(j.id)}>
-                    <div className="pjob-info">
-                      <strong>{j.title}</strong>
-                      <span className="pjob-meta">{j.family} · {j.output_format} · {j.status}</span>
+                <div className="project-job-list">
+                  {projectJobs.map((j) => (
+                    <div key={j.id}
+                      className={`pjob-row ${selectedJobId === j.id ? "is-active" : ""}`}
+                      onClick={() => {
+                        setSelectedJobId(j.id);
+                        setResearchScreen("job-running");
+                      }}>
+                      <div className="pjob-info">
+                        <strong>{j.title}</strong>
+                        <span className="pjob-meta">{j.family} · {j.output_format} · {j.status}</span>
+                      </div>
+                      <div className="pjob-btns">
+                        <button className="btn btn-teal btn-sm"
+                          onClick={(e) => { e.stopPropagation(); launchJob(j.id); }}>
+                          Launch
+                        </button>
+                        <button className="btn btn-ghost btn-sm"
+                          onClick={(e) => { e.stopPropagation(); window.desktop?.openPath?.(j.result_path); }}>
+                          Results
+                        </button>
+                      </div>
                     </div>
-                    <div className="pjob-btns">
-                      <button className="btn btn-teal btn-sm"
-                        onClick={(e) => { e.stopPropagation(); launchJob(j.id); }}>
-                        Launch
-                      </button>
-                      <button className="btn btn-ghost btn-sm"
-                        onClick={(e) => { e.stopPropagation(); window.desktop?.openPath?.(j.result_path); }}>
-                        Results
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
           </div>
-
-          {/* Right: selected job detail */}
-          {selectedJob && (
-            <div className="detail-rail">
-              <div className="detail-job-card">
-                <strong>{selectedJob.title}</strong>
-                <p className="dj-meta">
-                  {selectedJob.family} · {selectedJob.output_format}
-                  <span className={`dj-status-dot${selectedJob.status === "agent_running" ? " running" : ""}`} />
-                  {selectedJob.status}
-                </p>
-                <div className="dj-actions">
-                  <button className="btn btn-teal btn-sm"
-                    onClick={() => launchJob(selectedJob.id)}>
-                    {selectedJob.status === "agent_running" ? "Relaunch" : "Launch"}
-                  </button>
-                  <button className="btn btn-ghost btn-sm"
-                    onClick={() => window.desktop?.openPath?.(selectedJob.result_path)}>Results</button>
-                  <button className="btn btn-ghost btn-sm"
-                    onClick={() => window.desktop?.openPath?.(selectedJob.workspace_path)}>Files</button>
-                </div>
-
-                {/* Live log panel */}
-                {activeJobLog && (
-                  <div className="job-log-wrap">
-                    <div className="dj-label-row">
-                      <span className="dj-label">Live output</span>
-                      {selectedJob.status === "agent_running" && <span className="live-dot" />}
-                    </div>
-                    <pre ref={jobLogRef} className="job-log">{activeJobLog}</pre>
-                  </div>
-                )}
-
-                {/* Agent questions */}
-                {activeJobQuestions && (
-                  <div className="agent-questions">
-                    <span className="dj-label">Agent questions</span>
-                    <pre className="dj-prompt">{activeJobQuestions}</pre>
-                  </div>
-                )}
-
-                <label className="dj-label">
-                  Answer / add context
-                  <textarea rows={3} value={qaText} onChange={(e) => setQaText(e.target.value)}
-                    placeholder="Answer questions or add instructions for the agent…" />
-                </label>
-                <button className="btn btn-primary btn-sm" onClick={appendAnswer}
-                  disabled={!!busy || !qaText.trim()}>
-                  Append &amp; relaunch
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     );
@@ -921,13 +1275,19 @@ function App() {
 
   function renderJobRunning() {
     if (!selectedJob) return null;
-    const isRunning = selectedJob.status === "agent_running" || selectedJob.status === "scaffolded";
-    const isDone    = selectedJob.status === "done";
-    const isError   = selectedJob.status === "error";
+    const session = selectedSession;
+    const outputs = jobArtifacts[selectedJob.id] || [];
+    const activeStream =
+      monitorTab === "assistant" ? session?.agentText : monitorTab === "commands" ? session?.commandOutput : "";
+    const streamEmptyCopy =
+      monitorTab === "assistant"
+        ? "Codex assistant updates will stream here as the run progresses."
+        : monitorTab === "commands"
+        ? "Commands executed by Codex will stream here."
+        : "File changes will appear here after Codex edits or creates files.";
 
     return (
       <div className="job-companion-view">
-        {/* Breadcrumb */}
         <div className="detail-breadcrumb">
           <button
             className="back-icon-btn"
@@ -940,81 +1300,121 @@ function App() {
           <h2 className="breadcrumb-current">{activeProject?.name}</h2>
         </div>
 
-        {/* Status card */}
-        <div className={`job-companion-card${isDone ? " done" : isError ? " error" : ""}`}>
-          <div className="job-companion-header">
-            <div className="job-companion-title-row">
-              <span className="job-companion-title">{selectedJob.title}</span>
-              <span className={`job-companion-badge${isRunning ? " running" : isDone ? " done" : isError ? " error" : ""}`}>
-                {isRunning && <span className="job-terminal-pulse" />}
-                {isRunning ? "running" : isDone ? "done" : isError ? "error" : selectedJob.status}
-              </span>
+        <div className="run-monitor-grid">
+          <div className="run-monitor-main">
+            <div className="run-monitor-stream-card">
+              <div className="run-monitor-stream-header">
+                <div className="run-monitor-tabs">
+                  {[
+                    { id: "assistant", label: "Assistant" },
+                    { id: "commands", label: "Commands" },
+                    { id: "files", label: "Changes" },
+                  ].map((item) => (
+                    <button
+                      key={item.id}
+                      className={`run-monitor-tab ${monitorTab === item.id ? "is-active" : ""}`}
+                      onClick={() => setMonitorTab(item.id as "assistant" | "commands" | "files")}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {monitorTab === "files" ? (
+                session?.fileChanges.length ? (
+                  <div className="file-change-list">
+                    {session.fileChanges.map((change, index) => (
+                      <div className="file-change-card" key={`${change.path}-${index}`}>
+                        <div className="file-change-header">
+                          <strong>{change.path}</strong>
+                          <span>{change.kind.type}</span>
+                        </div>
+                        {change.kind.move_path && <p>Moved to {change.kind.move_path}</p>}
+                        {change.diff && <pre className="job-log file-change-diff">{trimDiff(change.diff)}</pre>}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="session-empty">{streamEmptyCopy}</div>
+                )
+              ) : monitorTab === "assistant" ? (
+                renderAssistantContent(activeStream || "", streamEmptyCopy)
+              ) : (
+                <pre ref={commandLogRef} className="job-companion-log">
+                  {activeStream || <span className="job-companion-log-empty">{streamEmptyCopy}</span>}
+                </pre>
+              )}
             </div>
-            <p className="job-companion-sub">
-              {isRunning
-                ? `${executor === "claude" ? "Claude" : "Codex"} is running in Terminal — switch there to follow along`
-                : isDone
-                ? "Generation complete — your output files are ready"
-                : isError
-                ? "Something went wrong — check the Terminal window for details"
-                : selectedJob.status}
-            </p>
+
+            <div className="run-monitor-output-card">
+              <div className="run-monitor-section-head">
+                <strong>Outputs</strong>
+                <button className="btn btn-ghost btn-sm" onClick={() => refreshArtifacts(selectedJob.id).catch(() => {})}>
+                  Refresh
+                </button>
+              </div>
+              <div className="run-monitor-actions">
+                <button className="btn btn-primary btn-sm" onClick={() => launchJob(selectedJob.id)}>
+                  {session?.running ? "Relaunch" : "Launch"}
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={() => window.desktop?.openPath?.(selectedJob.result_path)}>
+                  Open results
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={() => window.desktop?.openPath?.(selectedJob.workspace_path)}>
+                  Open workspace
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setResearchScreen("project-detail")}>
+                  Back to project
+                </button>
+              </div>
+              {renderOutputs(
+                selectedJob.id,
+                session?.running ? "Waiting for deliverables to land in result/." : "No deliverables found in result/ yet."
+              )}
+            </div>
           </div>
 
-          <div className="job-companion-actions">
-            {isRunning && (
-              <button
-                className="btn btn-primary"
-                onClick={() => window.desktop?.focusTerminal?.()}
-              >
-                Focus Terminal ↗
-              </button>
-            )}
-            {isDone && (
-              <button
-                className="btn btn-primary"
-                onClick={() => window.desktop?.openPath?.(selectedJob.result_path)}
-              >
-                Open results
-              </button>
-            )}
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => window.desktop?.openPath?.(selectedJob.workspace_path)}
-            >
-              Open workspace
-            </button>
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => setResearchScreen("project-detail")}
-            >
-              Back to project
-            </button>
-          </div>
-        </div>
+          <div className="run-monitor-side">
+            <div className="run-monitor-side-card">
+              <div className="run-monitor-section-head">
+                <strong>Pending approvals</strong>
+              </div>
+              {renderApprovalList(session?.approvals || [])}
+            </div>
 
-        {/* Log tail — secondary, smaller */}
-        <div className="job-companion-log-section">
-          <div className="dj-label-row">
-            <span className="dj-label">Output tail</span>
-            {isRunning && <span className="live-dot" />}
-            {isRunning && (
-              <button
-                className="job-companion-focus-link"
-                onClick={() => window.desktop?.focusTerminal?.()}
-              >
-                view full output in Terminal ↗
+            {session?.lastError ? <div className="session-error">{session.lastError}</div> : null}
+
+            <div className="run-monitor-side-card">
+              <div className="run-monitor-section-head">
+                <strong>Context</strong>
+              </div>
+              {selectedJob.question_log?.length ? (
+                <div className="qa-log">
+                  {selectedJob.question_log.slice(-4).map((entry, index) => (
+                    <div className="qa-entry" key={`${entry.timestamp}-${index}`}>
+                      <strong>{entry.role}</strong>
+                      <p>{entry.content}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="session-empty">No added context yet.</div>
+              )}
+              <label className="dj-label">
+                Answer / add context
+                <textarea
+                  rows={3}
+                  value={qaText}
+                  onChange={(e) => setQaText(e.target.value)}
+                  placeholder="Answer questions or add instructions for Codex…"
+                />
+              </label>
+              <button className="btn btn-primary btn-sm" onClick={appendAnswer} disabled={!!busy || !qaText.trim()}>
+                Append &amp; relaunch
               </button>
-            )}
+            </div>
           </div>
-          <pre ref={jobLogRef} className="job-companion-log">
-            {activeJobLog
-              ? activeJobLog
-              : <span className="job-companion-log-empty">
-                  {isRunning ? "▶ Waiting for output…" : "No output recorded."}
-                </span>
-            }
-          </pre>
         </div>
       </div>
     );
@@ -1043,31 +1443,27 @@ function App() {
           ))}
         </nav>
 
-        <div className="sidebar-footer">
-          <div className="executor-switcher">
-            <button
-              className={`exec-btn${executor === "codex" ? " is-active" : ""}`}
-              onClick={() => setExecutor("codex")}
-              title="GPT"
-            >GPT</button>
-            <button
-              className={`exec-btn${executor === "claude" ? " is-active" : ""}`}
-              onClick={() => setExecutor("claude")}
-              title="Claude Code (coming soon)"
-            >Claude</button>
+        <div className="sidebar-footer sidebar-footer-column">
+          <div className={`sidebar-account${account?.account ? " is-connected" : " is-disconnected"}`}>
+            <div className="sidebar-account-copy">
+              <strong>{formatAccountTitle(account)}</strong>
+              <span>{formatAccountSubtitle(account)}</span>
+            </div>
           </div>
-          <button className="refresh-btn" onClick={() => setShowTerminal(v => !v)} title="Server log">⌥</button>
-          <button className="refresh-btn" onClick={refreshState} title="Refresh state">↻</button>
+          <div className="sidebar-footer-actions">
+            {!account?.account && (
+              <button className="btn btn-ghost btn-sm" onClick={() => connectCodex().catch(() => {})}>
+                Connect Codex
+              </button>
+            )}
+            <button className="refresh-btn" onClick={() => setShowTerminal(v => !v)} title="Server log">⌥</button>
+            <button className="refresh-btn" onClick={() => { refreshAccount().catch(() => {}); refreshState().catch(() => {}); }} title="Refresh state">↻</button>
+          </div>
         </div>
       </aside>
 
       {/* Content */}
       <main className="content">
-        {/* Banners */}
-        {busy   && <div className="banner info">{busy}…</div>}
-        {message && <div className="banner success">{message}</div>}
-        {error   && <div className="banner error">{error}</div>}
-
         {/* Tab content with animation */}
         <div key={tab} className="tab-panel">
           {tab === "research" && (
@@ -1099,7 +1495,6 @@ function App() {
                     >
                       <div className="automation-card-header">
                         <span className="automation-card-title">{j.title}</span>
-                        <span className={`automation-status-dot ${j.status === "agent_running" ? "running" : ""}`} />
                         <span className="automation-status">{j.status}</span>
                       </div>
                       <div className="automation-card-meta">
@@ -1133,9 +1528,7 @@ function App() {
                     <button className="btn btn-ghost btn-sm" onClick={() => setSelectedAutomationId(null)}><X size={14} strokeWidth={2.5} /></button>
                   </div>
                   <div className="automation-output-meta">
-                    {selectedAutomation.family} · {selectedAutomation.output_format}
-                    <span className={`dj-status-dot${selectedAutomation.status === "agent_running" ? " running" : ""}`} />
-                    {selectedAutomation.status}
+                    {selectedAutomation.family} · {selectedAutomation.output_format} · {selectedAutomation.status}
                   </div>
                   <div className="automation-output-actions">
                     <button className="btn btn-teal btn-sm" onClick={() => launchJob(selectedAutomation.id)}>
@@ -1150,7 +1543,6 @@ function App() {
                     <div className="automation-log-wrap">
                       <div className="dj-label-row">
                         <span className="dj-label">Live output</span>
-                        {selectedAutomation.status === "agent_running" && <span className="live-dot" />}
                       </div>
                       <pre className="job-log automation-log">{activeAutomationLog}</pre>
                     </div>
@@ -1275,7 +1667,6 @@ function App() {
                 <div className="finder-log-inline">
                   <div className="dj-label-row">
                     <span className="dj-label">Browser worker</span>
-                    {finderStatus === "running" && <span className="live-dot" />}
                     {finderStatus !== "running" && <span className="dj-label" style={{ color: finderStatus === "done" ? "var(--success)" : "var(--danger)" }}>{finderStatus}</span>}
                   </div>
                   <pre className="job-log">{finderLog}</pre>
@@ -1300,7 +1691,7 @@ function App() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="terminal-chrome">
-                <span className="terminal-title">Backend output</span>
+                <span className="terminal-title">Codex server output</span>
               <button
                 className="terminal-close"
                 onClick={() => setShowTerminal(false)}
@@ -1313,7 +1704,7 @@ function App() {
               <pre ref={terminalRef} className="terminal-body">
                 {terminalText || (
                   <span className="terminal-empty">
-                    Backend stdout/stderr will appear here when the app runs.
+                    Codex app-server logs will appear here when the app runs.
                   </span>
                 )}
               </pre>

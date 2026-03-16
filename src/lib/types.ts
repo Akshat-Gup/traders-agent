@@ -26,6 +26,7 @@ export interface UpdateDefinitionRecord {
   output_format: string;
   instruments: string[];
   template_id?: string | null;
+  connectors?: string[];
   created_at: string;
 }
 
@@ -41,6 +42,13 @@ export interface JobRecord {
   created_at: string;
   updated_at: string;
   prompt_preview: string;
+  thread_id?: string | null;
+  active_turn_id?: string | null;
+  codex_status?: string | null;
+  last_event_at?: string | null;
+  approval_pending?: boolean;
+  last_agent_text?: string;
+  last_command_output?: string;
   project_id?: string | null;
   template_id?: string | null;
   cadence?: string | null;

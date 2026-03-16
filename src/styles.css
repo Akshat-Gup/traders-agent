@@ -33,6 +33,9 @@
   --success-bg:#e8f5eb;
   --danger:    #b53928;
   --danger-bg: #fce8e6;
+  --sidebar-card: rgba(255,255,255,0.1);
+  --sidebar-card-border: rgba(255,255,255,0.12);
+  --sidebar-text-soft: rgba(255,255,255,0.68);
 
   --r-xs: 6px;
   --r-sm: 10px;
@@ -748,7 +751,7 @@ select {
 .detail-main {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
   min-height: 0;
   flex: 1;
 }
@@ -757,21 +760,29 @@ select {
 .chat-stage {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
   flex: 1;
-  min-height: 400px;
-  padding: 32px 0;
+  min-height: 280px;
+  padding: 10px 0 0;
 }
 
-/* Spacer above chatbar — less than below so chat sits higher (no scroll) */
+/* Keep the composer visually high without leaving excessive dead space above it. */
 .chat-stage-above {
-  flex: 0.65 1 0;
+  flex: 0.16 1 0;
   min-height: 0;
 }
 
-/* When files are uploaded, shrink top spacer so everything moves up (no scroll) */
 .chat-stage.has-sources .chat-stage-above {
-  flex: 0.12 1 0;
+  flex: 0.02 1 0;
+}
+
+.chat-stage.has-jobs {
+  min-height: 0;
+  padding-top: 0;
+}
+
+.chat-stage.has-jobs .chat-stage-above {
+  flex: 0 1 0;
 }
 
 .chat-stage-center {
@@ -784,10 +795,10 @@ select {
 
 /* Upload zone + templates — below vertical center */
 .chat-stage-below {
-  flex: 1.35 1 0;
+  flex: 1 1 0;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 18px;
   min-height: 0;
   overflow-y: auto;
 }
@@ -798,7 +809,7 @@ select {
 
 .chat-stage-below > div:has(.section-label) {
   flex-shrink: 0;
-  padding-top: 4px;
+  padding-top: 2px;
 }
 
 /* Section label */
@@ -1161,6 +1172,14 @@ select {
   border-top: 1px solid var(--border);
 }
 
+.conn-helper-copy {
+  margin: 2px 0 4px;
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-soft);
+}
+
 .conn-toggle-switch {
   display: flex;
   align-items: center;
@@ -1331,7 +1350,18 @@ select {
 .project-jobs {
   display: flex;
   flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.project-job-list {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
+  max-height: 146px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
 }
 
 .pjob-row {
@@ -1345,6 +1375,15 @@ select {
   border-radius: var(--r);
   cursor: pointer;
   transition: border-color var(--dur), background var(--dur);
+}
+
+.project-job-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.project-job-list::-webkit-scrollbar-thumb {
+  background: rgba(153, 143, 132, 0.34);
+  border-radius: 999px;
 }
 
 .pjob-row:hover { border-color: var(--border-mid); background: var(--surface-alt); }
@@ -1544,24 +1583,6 @@ select {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.automation-status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--border-mid);
-  flex-shrink: 0;
-}
-
-.automation-status-dot.running {
-  background: var(--success);
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
 }
 
 .automation-status {
@@ -1948,36 +1969,6 @@ select {
   margin: 0;
 }
 
-.live-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #5ec06e;
-  box-shadow: 0 0 6px rgba(94,192,110,0.6);
-  animation: pulse 1.4s ease-in-out infinite;
-  flex-shrink: 0;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
-.dj-status-dot {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--border-mid);
-  margin: 0 5px;
-  vertical-align: middle;
-}
-.dj-status-dot.running {
-  background: #5ec06e;
-  box-shadow: 0 0 5px rgba(94,192,110,0.5);
-  animation: pulse 1.4s ease-in-out infinite;
-}
-
 .agent-questions {
   display: flex;
   flex-direction: column;
@@ -2230,126 +2221,10 @@ select {
   gap: 16px;
 }
 
-/* Pulse animation shared with old terminal view */
-.job-terminal-pulse {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--navy);
-  flex-shrink: 0;
-  animation: terminalPulse 1.4s ease-in-out infinite;
-}
-@keyframes terminalPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.25; }
-}
-
-/* Status card */
-.job-companion-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  padding: 24px 28px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  box-shadow: var(--shadow-sm);
-}
-.job-companion-card.done {
-  border-color: rgba(45, 122, 62, 0.25);
-  background: #f5fbf6;
-}
-.job-companion-card.error {
-  border-color: rgba(181, 57, 40, 0.2);
-  background: #fdf5f4;
-}
-
-.job-companion-header {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.job-companion-title-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.job-companion-title {
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.job-companion-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 500;
-  padding: 3px 10px;
-  border-radius: 99px;
-  background: var(--surface-alt);
-  color: var(--text-3);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.job-companion-badge.running {
-  background: rgba(30, 45, 111, 0.08);
-  color: var(--navy);
-}
-.job-companion-badge.done {
-  background: rgba(45, 122, 62, 0.1);
-  color: var(--success);
-}
-.job-companion-badge.error {
-  background: rgba(181, 57, 40, 0.08);
-  color: var(--danger);
-}
-
-.job-companion-sub {
-  font-size: 13.5px;
-  color: var(--text-2);
-  line-height: 1.5;
-}
-
-.job-companion-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-/* Log tail section */
-.job-companion-log-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex: 1;
-  min-height: 0;
-}
-
-.job-companion-focus-link {
-  font-size: 11px;
-  color: var(--navy);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  opacity: 0.7;
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  margin-left: 6px;
-}
-.job-companion-focus-link:hover { opacity: 1; }
-
 .job-companion-log {
   font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
   font-size: 12px;
   line-height: 1.6;
-  color: var(--text-2);
   background: #0d1117;
   border-radius: var(--r-sm);
   padding: 16px 20px;
@@ -2365,4 +2240,317 @@ select {
 .job-companion-log-empty {
   color: rgba(168, 216, 168, 0.4);
   font-style: italic;
+}
+
+.sidebar-footer-column {
+  align-items: stretch;
+  gap: 8px;
+}
+
+.sidebar-account {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 52px;
+  padding: 8px 12px;
+  border: 1px solid var(--sidebar-card-border);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.08));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+  overflow: hidden;
+}
+
+.sidebar-account.is-connected {
+  border-color: rgba(255,255,255,0.16);
+}
+
+.sidebar-account.is-disconnected {
+  background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.05));
+}
+
+.sidebar-account-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+
+.sidebar-account-copy strong {
+  font-size: 11px;
+  color: rgba(255,255,255,0.96);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.sidebar-account-copy span {
+  font-size: 10px;
+  color: var(--sidebar-text-soft);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.run-monitor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.9fr);
+  gap: 18px;
+  min-height: 0;
+}
+
+.run-monitor-main,
+.run-monitor-side {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 0;
+}
+
+.run-monitor-stream-card,
+.run-monitor-output-card,
+.run-monitor-side-card {
+  border: 1px solid var(--border-soft);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 18px 48px rgba(17, 24, 39, 0.06);
+}
+
+.run-monitor-stream-card,
+.run-monitor-side-card {
+  padding: 16px;
+}
+
+.run-monitor-output-card {
+  padding: 16px;
+}
+
+.run-monitor-stream-header,
+.run-monitor-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.run-monitor-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.05);
+}
+
+.run-monitor-tab {
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.run-monitor-tab.is-active {
+  background: var(--navy);
+  color: #fff;
+}
+
+.assistant-stream {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1;
+  min-height: 200px;
+  max-height: 420px;
+  overflow: auto;
+  padding: 4px 2px 4px 0;
+}
+
+.assistant-stream-paragraph,
+.assistant-stream-list {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.assistant-stream-list {
+  padding-left: 20px;
+}
+
+.assistant-stream-list-numbered {
+  padding-left: 22px;
+}
+
+.assistant-stream-code {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--border-soft);
+  background: rgba(245, 246, 251, 0.86);
+  color: var(--text-2);
+  font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.run-monitor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -2px 0 14px;
+}
+
+.monitor-output-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.monitor-output-card {
+  border: 1px solid var(--border-soft);
+  background: rgba(245, 246, 251, 0.86);
+  border-radius: 14px;
+  padding: 14px 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.monitor-output-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(30, 45, 111, 0.24);
+  box-shadow: 0 16px 34px rgba(17, 24, 39, 0.08);
+}
+
+.monitor-output-card-top,
+.monitor-output-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.monitor-output-card strong {
+  color: var(--text-1);
+}
+
+.monitor-output-card p,
+.monitor-output-card span {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.session-empty {
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  padding: 18px;
+  color: var(--text-3);
+  background: rgba(245, 246, 251, 0.68);
+}
+
+.session-error {
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: rgba(181, 57, 40, 0.08);
+  border: 1px solid rgba(181, 57, 40, 0.16);
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.approval-list,
+.file-change-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.approval-card,
+.file-change-card {
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  padding: 14px;
+  background: rgba(245, 246, 251, 0.82);
+}
+
+.approval-card strong,
+.file-change-card strong {
+  color: var(--text-1);
+}
+
+.approval-card p,
+.file-change-card p {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.approval-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.file-change-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.file-change-header span {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+}
+
+.file-change-diff {
+  margin-top: 12px;
+  max-height: 260px;
+}
+
+
+.session-thread-meta + .session-thread-meta {
+  margin-top: 14px;
+}
+
+.session-thread-meta span {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+}
+
+.session-thread-meta code {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-1);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 1180px) {
+  .run-monitor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .run-monitor-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
