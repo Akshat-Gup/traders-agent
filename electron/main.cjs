@@ -1,8 +1,10 @@
-const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, shell, nativeImage } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const http = require("node:http");
 const { spawn } = require("node:child_process");
+
+const ICON_PATH = path.join(__dirname, "..", "src", "logo.jpg");
 
 const BACKEND_PORT = process.env.BACKEND_PORT || "8765";
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
@@ -85,6 +87,7 @@ function waitForBackend(timeoutMs = 15000) {
 }
 
 function createWindow() {
+  const icon = fs.existsSync(ICON_PATH) ? nativeImage.createFromPath(ICON_PATH) : null;
   const win = new BrowserWindow({
     width: 1500,
     height: 980,
@@ -92,6 +95,8 @@ function createWindow() {
     minHeight: 780,
     backgroundColor: "#f5f4f1",
     titleBarStyle: "hiddenInset",
+    title: "Traders",
+    ...(icon && !icon.isEmpty() && { icon }),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -116,6 +121,12 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  app.setName("Traders");
+  if (process.platform === "darwin" && fs.existsSync(ICON_PATH)) {
+    try {
+      app.dock.setIcon(ICON_PATH);
+    } catch (_) {}
+  }
   // In dev, backend is already running via run_backend.sh
   if (!process.env.VITE_DEV_SERVER_URL) {
     startBackend();
@@ -144,6 +155,12 @@ app.whenReady().then(async () => {
   ipcMain.handle("desktop:getBackendUrl", async () => BACKEND_URL);
   ipcMain.handle("desktop:openPath", async (_, targetPath) => shell.openPath(targetPath));
   ipcMain.handle("desktop:getBackendLog", async () => backendLog);
+  ipcMain.handle("desktop:focusTerminal", async () => {
+    if (process.platform === "darwin") {
+      const { exec } = require("node:child_process");
+      exec(`osascript -e 'tell application "Terminal" to activate'`);
+    }
+  });
 
   // Wait for backend to be ready before showing the window
   try {

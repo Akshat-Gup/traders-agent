@@ -42,15 +42,21 @@ def executor_exists(executor: str = "codex") -> bool:
     return shutil.which(binary) is not None
 
 
-def build_command(workspace_path: Path, prompt_path: Path, executor: str = "codex") -> str:
+def build_command(
+    workspace_path: Path,
+    prompt_path: Path,
+    executor: str = "codex",
+    web_search: bool = False,
+) -> str:
     if executor == "claude":
         return (
             f'claude --dangerously-skip-permissions '
             f'-C "{workspace_path.as_posix()}" '
             f'-p "$(cat "{prompt_path.as_posix()}")"'
         )
+    search_flag = " --search" if web_search else ""
     return (
-        f'codex exec --full-auto '
+        f'codex exec --full-auto{search_flag} '
         f'-C "{workspace_path.as_posix()}" '
         f'"$(cat "{prompt_path.as_posix()}")"'
     )
@@ -61,6 +67,7 @@ def launch_job(
     prompt_path: Path,
     job_id: str,
     executor: str = "codex",
+    web_search: bool = False,
 ) -> str:
     """
     Launch the executor:
@@ -71,7 +78,7 @@ def launch_job(
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
     api_key = get_api_key()
-    shell_cmd = build_command(workspace_path, prompt_path, executor)
+    shell_cmd = build_command(workspace_path, prompt_path, executor, web_search=web_search)
     system = platform.system().lower()
 
     # Full shell script: set key + run + tee output to log file
@@ -80,7 +87,12 @@ def launch_job(
 
     if "darwin" in system:
         safe = full_script.replace("\\", "\\\\").replace('"', '\\"')
-        apple_script = f'tell application "Terminal" to do script "{safe}"'
+        apple_script = (
+            f'tell application "Terminal"\n'
+            f'  do script "{safe}"\n'
+            f'  activate\n'
+            f'end tell'
+        )
         subprocess.Popen(["osascript", "-e", apple_script])
     elif "windows" in system:
         env_prefix_win = f'set OPENAI_API_KEY={api_key} && ' if api_key else ""

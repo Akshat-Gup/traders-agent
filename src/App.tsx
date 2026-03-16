@@ -1,9 +1,12 @@
 import { type ReactNode, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowLeft,
   BarChart3,
   BookOpen,
   Briefcase,
+  Calculator,
+  Calendar,
   ChevronDown,
   FileStack,
   FileText,
@@ -13,7 +16,9 @@ import {
   Package,
   Paperclip,
   PieChart,
+  Plug,
   TrendingUp,
+  X,
   Zap,
   type LucideIcon,
 } from "lucide-react";
@@ -43,8 +48,8 @@ function projectIcon(id: string): LucideIcon {
   return PROJECT_ICONS[Math.abs(h) % PROJECT_ICONS.length];
 }
 
-type TabKey = "updates" | "finder" | "research";
-type ResearchScreen = "projects" | "project-detail";
+type TabKey = "automation" | "finder" | "research";
+type ResearchScreen = "projects" | "project-detail" | "job-running";
 
 const EMPTY_STATE: AppState = {
   data_root: "",
@@ -73,7 +78,6 @@ const TEMPLATE_CARDS = [
     label: "Equity Research",
     desc: "Full 10-page analyst note with valuation, price target, and risk matrix",
     family: "equity-research",
-    icon: "📊",
     outputs: ["PPTX", "DOCX", "PDF"],
   },
   {
@@ -81,7 +85,6 @@ const TEMPLATE_CARDS = [
     label: "Post-Earnings Update",
     desc: "Beat/miss analysis, guidance changes, and revised thesis for earnings calls",
     family: "quarterly-stock-update",
-    icon: "📅",
     outputs: ["DOCX", "PDF"],
   },
   {
@@ -89,7 +92,6 @@ const TEMPLATE_CARDS = [
     label: "Commodity Report",
     desc: "Supply/demand balance, positioning data, and price outlook with charts",
     family: "commodity-report",
-    icon: "🛢️",
     outputs: ["PPTX", "PDF"],
   },
   {
@@ -97,7 +99,6 @@ const TEMPLATE_CARDS = [
     label: "Case Comp Deck",
     desc: "Investment recommendation deck in case comp / AM presentation style",
     family: "case-comp",
-    icon: "🏆",
     outputs: ["PPTX"],
   },
   {
@@ -105,7 +106,6 @@ const TEMPLATE_CARDS = [
     label: "Macro Recap",
     desc: "Cross-asset weekly recap with annotated charts and trade ideas",
     family: "macro-update",
-    icon: "🌍",
     outputs: ["PPTX", "PDF"],
   },
   {
@@ -113,7 +113,6 @@ const TEMPLATE_CARDS = [
     label: "Weekly Commodity",
     desc: "Short-form commodity update with positioning and near-term catalysts",
     family: "weekly-commodity-update",
-    icon: "📈",
     outputs: ["DOCX", "PDF"],
   },
   {
@@ -121,7 +120,6 @@ const TEMPLATE_CARDS = [
     label: "Full Pipeline",
     desc: "PDF → 5 charts → DCF Excel + comps → DOCX report. Two output files: report.docx + valuation.xlsx",
     family: "equity-research",
-    icon: "⚡",
     outputs: ["DOCX", "XLSX"],
     badge: "test",
   },
@@ -145,7 +143,7 @@ const FORMAT_OPTIONS: { value: string; label: string; icon: ReactNode }[] = [
 
 const tabs: { key: TabKey; label: string; icon: string }[] = [
   { key: "research", label: "Research", icon: "◈" },
-  { key: "updates", label: "Updates", icon: "⟳" },
+  { key: "automation", label: "Automation", icon: "⟳" },
   { key: "finder", label: "Finder", icon: "⬡" }
 ];
 
@@ -155,6 +153,7 @@ function csvToList(value: string) {
 
 function App() {
   const [tab, setTab] = useState<TabKey>("research");
+  const [showNewAutomation, setShowNewAutomation] = useState(false);
   const [state, setState] = useState<AppState>(EMPTY_STATE);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -180,6 +179,13 @@ function App() {
   const [jobFamily, setJobFamily] = useState("equity-research");
   const [showConnectors, setShowConnectors] = useState(false);
   const [showFormatPicker, setShowFormatPicker] = useState(false);
+  const [valuationRequired, setValuationRequired] = useState(false);
+  const [enabledConnectors, setEnabledConnectors] = useState<Record<string, boolean>>({
+    bloomberg: false,
+    refinitiv: false,
+    factset: false,
+    alpha_vantage: false,
+  });
   const [isDragOver, setIsDragOver] = useState(false);
   // Intake question flow
   const [intakeStep, setIntakeStep] = useState<"compose" | "questions" | "done">("compose");
@@ -197,7 +203,8 @@ function App() {
   // Update definition form
   const [updateForm, setUpdateForm] = useState({
     name: "", cadence: "daily", family: "macro-update", outputFormat: "pdf",
-    instruments: "EURUSD, XAUUSD, Brent, SPY", templateId: ""
+    instruments: "EURUSD, XAUUSD, Brent, SPY", templateId: "",
+    connectors: "premium-primary"
   });
 
   // Finder form
@@ -211,6 +218,7 @@ function App() {
 
   // Jobs
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [selectedAutomationId, setSelectedAutomationId] = useState<string | null>(null);
   const [qaText, setQaText] = useState("");
   const selectedJob = useMemo(
     () => state.jobs.find((j) => j.id === selectedJobId) || null,
@@ -225,6 +233,18 @@ function App() {
   const projectJobs = useMemo(
     () => state.jobs.filter((j) => (j as any).project_id === activeProjectId),
     [state.jobs, activeProjectId]
+  );
+
+  const automationJobs = useMemo(
+    () => state.jobs.filter((j) => j.kind === "update").sort((a, b) =>
+      (b.updated_at || "").localeCompare(a.updated_at || "")
+    ),
+    [state.jobs]
+  );
+
+  const selectedAutomation = useMemo(
+    () => automationJobs.find((j) => j.id === selectedAutomationId) || null,
+    [automationJobs, selectedAutomationId]
   );
 
   async function refreshState() {
@@ -294,6 +314,9 @@ function App() {
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
 
+
+  const [activeAutomationLog, setActiveAutomationLog] = useState("");
+
   // Live log polling for running jobs
   useEffect(() => {
     if (!selectedJob || selectedJob.status !== "agent_running") {
@@ -312,10 +335,36 @@ function App() {
     return () => { active = false; clearInterval(id); };
   }, [selectedJob?.id, selectedJob?.status]);
 
+  // Automation log polling (when viewing automation tab)
+  useEffect(() => {
+    if (!selectedAutomation || selectedAutomation.status !== "agent_running") {
+      setActiveAutomationLog("");
+      return;
+    }
+    let active = true;
+    const poll = async () => {
+      try {
+        const { log } = await api.jobLogs(selectedAutomation.id);
+        if (active) setActiveAutomationLog(log);
+      } catch { /* ignore */ }
+    };
+    poll();
+    const id = setInterval(poll, 2000);
+    return () => { active = false; clearInterval(id); };
+  }, [selectedAutomation?.id, selectedAutomation?.status]);
+
   // Auto-scroll job log
   useEffect(() => {
     if (jobLogRef.current) jobLogRef.current.scrollTop = jobLogRef.current.scrollHeight;
   }, [activeJobLog]);
+
+  // Poll state refresh while viewing the running screen so status updates
+  useEffect(() => {
+    if (researchScreen !== "job-running") return;
+    if (!selectedJob || (selectedJob.status !== "agent_running" && selectedJob.status !== "scaffolded")) return;
+    const id = setInterval(() => { refreshState(); }, 3000);
+    return () => clearInterval(id);
+  }, [researchScreen, selectedJob?.id, selectedJob?.status]);
 
   // Finder recipe log polling
   useEffect(() => {
@@ -381,24 +430,8 @@ function App() {
   async function submitResearchJob(e: FormEvent) {
     e.preventDefault();
     if (!chatMsg.trim() && !jobSources.length) return;
-    // First step: show intake questions
-    if (intakeStep === "compose") {
-      const tpl = TEMPLATE_CARDS.find((t) => t.id === selectedTemplate);
-      await withBusy("Thinking…", async () => {
-        const { questions } = await api.intakeQuestions({
-          objective: chatMsg,
-          family: tpl?.family || jobFamily,
-        });
-        setIntakeQuestions(questions);
-        setIntakeAnswers({});
-        setIntakeStep("questions");
-      });
-      return;
-    }
-    // Second step (answers confirmed or skipped): create job with collected answers
-    if (intakeStep !== "done") return;
     const tpl = TEMPLATE_CARDS.find((t) => t.id === selectedTemplate);
-    await withBusy("Scaffolding workspace", async () => {
+    await withBusy("Launching…", async () => {
       const job = await api.createJob({
         kind: "research" as JobKind,
         title: chatMsg.slice(0, 80) || "Research job",
@@ -411,31 +444,37 @@ function App() {
         source_paths: jobSources,
         urls: [],
         custom_instructions: "",
-        intake_answers: intakeAnswers,
+        intake_answers: {},
         question_prompts: [],
-        valuation_required: intakeAnswers["valuation"]?.[0] !== "none",
+        valuation_required: valuationRequired,
+        enabled_connectors: Object.keys(enabledConnectors).filter(k => enabledConnectors[k]),
       });
-      setMessage("Workspace ready — launch Codex to generate.");
+      const jobId = (job as any).id as string;
+      setSelectedJobId(jobId);
+      // Auto-launch immediately — opens Terminal.app window + streams log
+      await api.launchJob(jobId, executor);
       setChatMsg("");
       setJobSources([]);
-      setIntakeStep("compose");
-      setIntakeQuestions([]);
-      setIntakeAnswers({});
-      setSelectedJobId((job as any).id || null);
-      await refreshState();
+      // Bring the Terminal.app window to front
+      window.desktop?.focusTerminal?.();
+      // Switch to companion status view immediately, refresh state in background
+      setResearchScreen("job-running");
+      refreshState().catch(() => {});
     });
   }
 
   async function onUpdateSubmit(e: FormEvent) {
     e.preventDefault();
-    await withBusy("Saving definition", async () => {
+    await withBusy("Creating automation", async () => {
       await api.createUpdateDefinition({
         name: updateForm.name, cadence: updateForm.cadence, family: updateForm.family,
         output_format: updateForm.outputFormat, instruments: csvToList(updateForm.instruments),
-        template_id: updateForm.templateId || null
+        template_id: updateForm.templateId || null,
+        connectors: csvToList(updateForm.connectors)
       });
-      setMessage("Update definition saved.");
+      setMessage("Automation created.");
       setUpdateForm((c) => ({ ...c, name: "" }));
+      setShowNewAutomation(false);
       await refreshState();
     });
   }
@@ -458,10 +497,12 @@ function App() {
 
   async function onFinderSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!finderForm.request.trim()) return;
     await withBusy("Staging workspace", async () => {
+      const title = finderForm.title || finderForm.request.slice(0, 60) + (finderForm.request.length > 60 ? "…" : "");
       await api.createJob({
         kind: "finder" as JobKind,
-        title: finderForm.title, family: "report-finder",
+        title, family: "report-finder",
         objective: finderForm.request,
         output_format: finderForm.outputFormat, project_id: finderForm.projectId || null,
         source_paths: finderForm.downloadPaths,
@@ -504,8 +545,8 @@ function App() {
           </button>
         </div>
 
-        {showNewProject && (
-          <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowNewProject(false); }}>
+        {showNewProject && createPortal(
+          <div className="modal-overlay modal-overlay-clear" onClick={(e) => { if (e.target === e.currentTarget) setShowNewProject(false); }}>
             <form className="new-project-card" onSubmit={onCreateProject}>
               <p className="npc-title">New Project</p>
               <label>
@@ -526,7 +567,8 @@ function App() {
                 </button>
               </div>
             </form>
-          </div>
+          </div>,
+          document.body
         )}
 
         {state.projects.length === 0 && !showNewProject ? (
@@ -574,7 +616,7 @@ function App() {
           </button>
           <span className="breadcrumb-divider">/</span>
           <h2 className="breadcrumb-current">{activeProject.name}</h2>
-          <div style={{ marginLeft: "auto" }}>
+          <div className="breadcrumb-actions">
             <button className="btn btn-ghost btn-sm"
               onClick={() => window.desktop?.openPath?.((activeProject as any).root_path)}>
               Open folder
@@ -585,9 +627,10 @@ function App() {
         <div className={`detail-body${selectedJob ? " has-rail" : ""}`}>
           <div className="detail-main">
 
-            {/* Chat + upload zone + templates — vertically centered stage */}
-            <div className="chat-stage">
-
+            {/* Chat + upload zone + templates — chatbar at vertical center */}
+            <div className={`chat-stage${jobSources.length > 0 ? " has-sources" : ""}`}>
+              <div className="chat-stage-above" aria-hidden />
+              <div className="chat-stage-center">
               {/* Chat bar */}
               <form className="chat-area" onSubmit={submitResearchJob}>
                 <textarea
@@ -609,34 +652,63 @@ function App() {
                 <div className="chat-actions">
                   <div className="chat-actions-left">
 
-                    {/* Connectors dropdown — rendered outside overflow context */}
+                    {/* Attach button */}
+                    <button type="button" className="chat-pill-btn"
+                      onClick={async () => {
+                        const p = await choosePaths("mixed");
+                        setJobSources((c) => [...new Set([...c, ...p])]);
+                      }}>
+                      <Paperclip size={13} strokeWidth={2} />
+                      <span>Attach</span>
+                    </button>
+
+                    {/* Connectors + valuation dropdown */}
                     <div className="connectors-wrap" ref={connectorsRef}>
-                      <button type="button" className="chat-pill-btn"
+                      <button type="button"
+                        className={`chat-pill-btn${(valuationRequired || Object.values(enabledConnectors).some(Boolean)) ? " is-active" : ""}`}
                         onClick={() => { setShowConnectors(v => !v); setShowFormatPicker(false); }}>
-                        <Paperclip size={13} strokeWidth={2} />
-                        <span>Attach</span>
+                        <Plug size={13} strokeWidth={2} />
+                        <span>Connectors</span>
                         <ChevronDown size={10} />
                       </button>
                       {showConnectors && (
-                        <div className="chat-dropdown">
-                          <button type="button" onClick={async () => {
-                            const p = await choosePaths("mixed");
-                            setJobSources((c) => [...new Set([...c, ...p])]);
-                            setShowConnectors(false);
-                          }}>
-                            <FileText size={13} />
-                            <span>Upload files</span>
-                            <span className="chat-dropdown-hint">PDF, DOCX, XLSX…</span>
-                          </button>
-                          <button type="button" onClick={async () => {
-                            const p = await choosePaths("folders");
-                            setJobSources((c) => [...new Set([...c, ...p])]);
-                            setShowConnectors(false);
-                          }}>
-                            <FolderOpen size={13} />
-                            <span>Upload folder</span>
-                            <span className="chat-dropdown-hint">All files inside</span>
-                          </button>
+                        <div className="chat-dropdown conn-panel conn-dropdown-below">
+                          <div className="conn-group">
+                            <button type="button"
+                              className={`conn-toggle-switch${valuationRequired ? " on" : ""}`}
+                              onClick={() => setValuationRequired(v => !v)}
+                              title="Valuation (Excel DCF)">
+                              <Calculator size={11} />
+                              <span>Valuation</span>
+                              <span className="conn-toggle-knob" />
+                            </button>
+                            {(["bloomberg", "refinitiv", "factset", "alpha_vantage"] as const).map(key => (
+                              <button key={key} type="button"
+                                className={`conn-toggle-switch${enabledConnectors[key] ? " on" : ""}`}
+                                onClick={() => setEnabledConnectors(c => ({ ...c, [key]: !c[key] }))}>
+                                <span>{key === "alpha_vantage" ? "Alpha Vantage" : key.charAt(0).toUpperCase() + key.slice(1)}</span>
+                                <span className="conn-toggle-knob" />
+                              </button>
+                            ))}
+                          </div>
+                          <div className="conn-group conn-group-files">
+                            <button type="button" className="conn-file-btn" onClick={async () => {
+                              const p = await choosePaths("mixed");
+                              setJobSources((c) => [...new Set([...c, ...p])]);
+                              setShowConnectors(false);
+                            }}>
+                              <FileText size={12} />
+                              <span>Add files</span>
+                            </button>
+                            <button type="button" className="conn-file-btn" onClick={async () => {
+                              const p = await choosePaths("folders");
+                              setJobSources((c) => [...new Set([...c, ...p])]);
+                              setShowConnectors(false);
+                            }}>
+                              <FolderOpen size={12} />
+                              <span>Add folder</span>
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -665,69 +737,13 @@ function App() {
 
                   </div>
                   <button className="btn btn-primary btn-sm" type="submit" disabled={!!busy}>
-                    {busy ? "Working…" : "Generate ↗"}
+                    {busy ? "Working…" : "Generate"}
                   </button>
                 </div>
               </form>
+              </div>
 
-              {/* ── Intake question overlay ── */}
-              {intakeStep === "questions" && intakeQuestions.length > 0 && (
-                <div className="intake-panel">
-                  <div className="intake-header">
-                    <span className="intake-title">A few quick questions</span>
-                    <button type="button" className="intake-skip"
-                      onClick={() => { setIntakeStep("compose"); setIntakeQuestions([]); }}>
-                      ✕
-                    </button>
-                  </div>
-                  <div className="intake-questions">
-                    {intakeQuestions.map((q) => (
-                      <div key={q.id} className="intake-q">
-                        <div className="intake-q-text">
-                          {q.text}
-                          {q.multi && <span className="intake-multi-hint"> — pick all that apply</span>}
-                        </div>
-                        <div className="intake-options">
-                          {q.options.map((opt) => {
-                            const selected = (intakeAnswers[q.id] || []).includes(opt.id);
-                            return (
-                              <button
-                                key={opt.id}
-                                type="button"
-                                className={`intake-opt${selected ? " is-selected" : ""}`}
-                                onClick={() => {
-                                  setIntakeAnswers((prev) => {
-                                    const cur = prev[q.id] || [];
-                                    if (q.multi) {
-                                      return { ...prev, [q.id]: selected ? cur.filter(x => x !== opt.id) : [...cur, opt.id] };
-                                    }
-                                    return { ...prev, [q.id]: [opt.id] };
-                                  });
-                                }}
-                              >
-                                {opt.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="intake-footer">
-                    <button type="button" className="btn btn-ghost btn-sm"
-                      onClick={() => { setIntakeStep("compose"); setIntakeQuestions([]); }}>
-                      Back
-                    </button>
-                    <button
-                      className="btn btn-primary"
-                      onClick={(e) => { setIntakeStep("done"); submitResearchJob(e as any); }}
-                    >
-                      Generate ↗
-                    </button>
-                  </div>
-                </div>
-              )}
-
+              <div className="chat-stage-below">
               {/* Source files zone — between chat and templates */}
               <div
                 className={`upload-zone${isDragOver ? " drag-over" : ""}`}
@@ -742,7 +758,7 @@ function App() {
                   setIsDragOver(false);
                   const paths: string[] = [];
                   for (const f of Array.from(e.dataTransfer.files)) {
-                    const p = (f as any).path as string | undefined;
+                    const p = window.desktop?.getPathForFile?.(f);
                     if (p) paths.push(p);
                   }
                   if (paths.length) setJobSources(c => [...new Set([...c, ...paths])]);
@@ -758,9 +774,9 @@ function App() {
                   <div className="upload-zone-chips">
                     {jobSources.map((p) => (
                       <span key={p} className="chip">
-                        {p.split("/").pop()}
+                        <span>{p.split("/").pop()}</span>
                         <button type="button" className="chip-remove"
-                          onClick={(e) => { e.stopPropagation(); setJobSources(c => c.filter(x => x !== p)); }}>×</button>
+                          onClick={(e) => { e.stopPropagation(); setJobSources(c => c.filter(x => x !== p)); }}><X size={12} strokeWidth={2.5} /></button>
                       </span>
                     ))}
                     <button type="button" className="upload-zone-add"
@@ -802,7 +818,7 @@ function App() {
                             <div className="tpl-prev-line l4" />
                           </div>
                           {selectedTemplate === t.id && (
-                            <div className="tpl-prev-checkmark">✓</div>
+                            <div className="tpl-prev-checkmark" />
                           )}
                         </div>
                         <div className="tpl-prev-label">
@@ -815,6 +831,7 @@ function App() {
                 </div>
               </div>
 
+              </div>{/* end .chat-stage-below */}
             </div>{/* end .chat-stage */}
 
             {/* Job list for this project */}
@@ -902,6 +919,107 @@ function App() {
     );
   }
 
+  function renderJobRunning() {
+    if (!selectedJob) return null;
+    const isRunning = selectedJob.status === "agent_running" || selectedJob.status === "scaffolded";
+    const isDone    = selectedJob.status === "done";
+    const isError   = selectedJob.status === "error";
+
+    return (
+      <div className="job-companion-view">
+        {/* Breadcrumb */}
+        <div className="detail-breadcrumb">
+          <button
+            className="back-icon-btn"
+            title="Back to project"
+            onClick={() => setResearchScreen("project-detail")}
+          >
+            <ArrowLeft size={15} strokeWidth={2.2} />
+          </button>
+          <span className="breadcrumb-divider">/</span>
+          <h2 className="breadcrumb-current">{activeProject?.name}</h2>
+        </div>
+
+        {/* Status card */}
+        <div className={`job-companion-card${isDone ? " done" : isError ? " error" : ""}`}>
+          <div className="job-companion-header">
+            <div className="job-companion-title-row">
+              <span className="job-companion-title">{selectedJob.title}</span>
+              <span className={`job-companion-badge${isRunning ? " running" : isDone ? " done" : isError ? " error" : ""}`}>
+                {isRunning && <span className="job-terminal-pulse" />}
+                {isRunning ? "running" : isDone ? "done" : isError ? "error" : selectedJob.status}
+              </span>
+            </div>
+            <p className="job-companion-sub">
+              {isRunning
+                ? `${executor === "claude" ? "Claude" : "Codex"} is running in Terminal — switch there to follow along`
+                : isDone
+                ? "Generation complete — your output files are ready"
+                : isError
+                ? "Something went wrong — check the Terminal window for details"
+                : selectedJob.status}
+            </p>
+          </div>
+
+          <div className="job-companion-actions">
+            {isRunning && (
+              <button
+                className="btn btn-primary"
+                onClick={() => window.desktop?.focusTerminal?.()}
+              >
+                Focus Terminal ↗
+              </button>
+            )}
+            {isDone && (
+              <button
+                className="btn btn-primary"
+                onClick={() => window.desktop?.openPath?.(selectedJob.result_path)}
+              >
+                Open results
+              </button>
+            )}
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => window.desktop?.openPath?.(selectedJob.workspace_path)}
+            >
+              Open workspace
+            </button>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => setResearchScreen("project-detail")}
+            >
+              Back to project
+            </button>
+          </div>
+        </div>
+
+        {/* Log tail — secondary, smaller */}
+        <div className="job-companion-log-section">
+          <div className="dj-label-row">
+            <span className="dj-label">Output tail</span>
+            {isRunning && <span className="live-dot" />}
+            {isRunning && (
+              <button
+                className="job-companion-focus-link"
+                onClick={() => window.desktop?.focusTerminal?.()}
+              >
+                view full output in Terminal ↗
+              </button>
+            )}
+          </div>
+          <pre ref={jobLogRef} className="job-companion-log">
+            {activeJobLog
+              ? activeJobLog
+              : <span className="job-companion-log-empty">
+                  {isRunning ? "▶ Waiting for output…" : "No output recorded."}
+                </span>
+            }
+          </pre>
+        </div>
+      </div>
+    );
+  }
+
   // ──────────────────────────────────────────────────────────
   // Main render
   // ──────────────────────────────────────────────────────────
@@ -912,10 +1030,6 @@ function App() {
       <aside className="sidebar">
         <div className="brand">
           <img src={logoSrc} alt="Traders@UST" className="brand-logo" />
-          <div className="brand-text">
-            <span className="brand-name">Market Workbench</span>
-            <span className="brand-sub">Research · Reports · Updates</span>
-          </div>
         </div>
 
         <nav className="tab-list">
@@ -934,8 +1048,8 @@ function App() {
             <button
               className={`exec-btn${executor === "codex" ? " is-active" : ""}`}
               onClick={() => setExecutor("codex")}
-              title="Codex CLI"
-            >Codex</button>
+              title="GPT"
+            >GPT</button>
             <button
               className={`exec-btn${executor === "claude" ? " is-active" : ""}`}
               onClick={() => setExecutor("claude")}
@@ -957,160 +1071,216 @@ function App() {
         {/* Tab content with animation */}
         <div key={tab} className="tab-panel">
           {tab === "research" && (
-            researchScreen === "projects" ? renderProjectsList() : renderProjectDetail()
+            researchScreen === "projects"
+              ? renderProjectsList()
+              : researchScreen === "job-running"
+              ? renderJobRunning()
+              : renderProjectDetail()
           )}
 
-          {tab === "updates" && (
-          <div className="std-view">
-            <div className="std-header">
-              <h2>Automated Updates</h2>
+          {tab === "automation" && (
+          <div className="automation-view">
+            <div className="automation-header">
+              <h2>Automation</h2>
+              <button className="btn btn-primary" onClick={() => setShowNewAutomation(true)}>
+                <span>+</span> New automation
+              </button>
             </div>
-            <div className="two-col">
-              <form className="panel" onSubmit={onUpdateSubmit}>
-                <div className="panel-heading">New update definition</div>
-                <label>
-                  Name
-                  <input value={updateForm.name}
-                    onChange={(e) => setUpdateForm((c) => ({ ...c, name: e.target.value }))} required />
-                </label>
-                <div className="field-row">
-                  <label>
-                    Cadence
-                    <select value={updateForm.cadence}
-                      onChange={(e) => setUpdateForm((c) => ({ ...c, cadence: e.target.value }))}>
-                      <option value="daily">Daily</option>
-                      <option value="weekly">Weekly</option>
-                      <option value="adhoc">Ad hoc</option>
-                    </select>
-                  </label>
-                  <label>
-                    Output
-                    <select value={updateForm.outputFormat}
-                      onChange={(e) => setUpdateForm((c) => ({ ...c, outputFormat: e.target.value }))}>
-                      <option value="pdf">PDF</option>
-                      <option value="pptx">PPTX</option>
-                      <option value="docx">DOCX</option>
-                    </select>
-                  </label>
-                </div>
-                <label>
-                  Report type
-                  <select value={updateForm.family}
-                    onChange={(e) => setUpdateForm((c) => ({ ...c, family: e.target.value }))}>
-                    {FAMILIES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
-                  </select>
-                </label>
-                <label>
-                  Instruments
-                  <textarea rows={2} value={updateForm.instruments}
-                    onChange={(e) => setUpdateForm((c) => ({ ...c, instruments: e.target.value }))} />
-                </label>
-                <button className="btn btn-primary" disabled={!!busy}>Save definition</button>
-              </form>
 
-              <div className="panel">
-                <div className="panel-heading">Saved definitions</div>
-                <div className="stack-list">
-                  {state.update_definitions.map((d) => (
-                    <div className="list-card" key={d.id}>
-                      <div>
-                        <strong>{d.name}</strong>
-                        <p>{d.cadence} · {d.family} · {d.output_format}</p>
-                        <small>{d.instruments.join(", ")}</small>
+            <div className={`automation-body${selectedAutomation ? " has-output" : ""}`}>
+              <div className="automation-list-section">
+                <div className="section-label">Running automations</div>
+                <div className="automation-cards">
+                  {automationJobs.map((j) => (
+                    <div
+                      key={j.id}
+                      className={`automation-card ${selectedAutomationId === j.id ? "is-active" : ""}`}
+                      onClick={() => setSelectedAutomationId(j.id)}
+                    >
+                      <div className="automation-card-header">
+                        <span className="automation-card-title">{j.title}</span>
+                        <span className={`automation-status-dot ${j.status === "agent_running" ? "running" : ""}`} />
+                        <span className="automation-status">{j.status}</span>
                       </div>
-                      <button className="btn btn-teal btn-sm" onClick={async () => {
-                        await withBusy("Running", async () => {
-                          await api.runUpdateDefinition(d.id);
-                          setMessage("Update run staged.");
-                          await refreshState();
-                        });
-                      }}>Run now</button>
+                      <div className="automation-card-meta">
+                        {j.family} · {j.output_format}
+                      </div>
+                      <div className="automation-card-actions">
+                        <button className="btn btn-teal btn-sm"
+                          onClick={(e) => { e.stopPropagation(); launchJob(j.id); }}>
+                          {j.status === "agent_running" ? "Relaunch" : "Run"}
+                        </button>
+                        <button className="btn btn-ghost btn-sm"
+                          onClick={(e) => { e.stopPropagation(); window.desktop?.openPath?.(j.result_path); }}>
+                          Results
+                        </button>
+                      </div>
                     </div>
                   ))}
-                  {state.update_definitions.length === 0 &&
-                    <p className="empty-copy">No definitions yet.</p>}
+                  {automationJobs.length === 0 && (
+                    <div className="automation-empty">
+                      <p>No automations running yet.</p>
+                      <p className="automation-empty-hint">Create one with the + button above.</p>
+                    </div>
+                  )}
                 </div>
               </div>
+
+              {selectedAutomation && (
+                <div className="automation-output-panel">
+                  <div className="automation-output-header">
+                    <strong>{selectedAutomation.title}</strong>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setSelectedAutomationId(null)}><X size={14} strokeWidth={2.5} /></button>
+                  </div>
+                  <div className="automation-output-meta">
+                    {selectedAutomation.family} · {selectedAutomation.output_format}
+                    <span className={`dj-status-dot${selectedAutomation.status === "agent_running" ? " running" : ""}`} />
+                    {selectedAutomation.status}
+                  </div>
+                  <div className="automation-output-actions">
+                    <button className="btn btn-teal btn-sm" onClick={() => launchJob(selectedAutomation.id)}>
+                      {selectedAutomation.status === "agent_running" ? "Relaunch" : "Launch"}
+                    </button>
+                    <button className="btn btn-ghost btn-sm"
+                      onClick={() => window.desktop?.openPath?.(selectedAutomation.result_path)}>
+                      Open results
+                    </button>
+                  </div>
+                  {activeAutomationLog && (
+                    <div className="automation-log-wrap">
+                      <div className="dj-label-row">
+                        <span className="dj-label">Live output</span>
+                        {selectedAutomation.status === "agent_running" && <span className="live-dot" />}
+                      </div>
+                      <pre className="job-log automation-log">{activeAutomationLog}</pre>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
+
+            {showNewAutomation && (
+              <div className="modal-overlay modal-overlay-clear" onClick={(e) => { if (e.target === e.currentTarget) setShowNewAutomation(false); }}>
+                <form className="new-automation-modal" onSubmit={onUpdateSubmit}>
+                  <div className="modal-heading">
+                    <h3>New automation</h3>
+                    <button type="button" className="modal-close" onClick={() => setShowNewAutomation(false)}><X size={16} strokeWidth={2.5} /></button>
+                  </div>
+                  <div className="automation-form-grid">
+                    <label className="automation-field">
+                      <span className="automation-field-label">
+                        <FileText size={14} />
+                        <span>Name</span>
+                      </span>
+                      <input value={updateForm.name}
+                        onChange={(e) => setUpdateForm((c) => ({ ...c, name: e.target.value }))} required
+                        placeholder="e.g. Daily Macro Recap" />
+                    </label>
+                    <label className="automation-field">
+                      <span className="automation-field-label">
+                        <Calendar size={14} />
+                        <span>Cadence</span>
+                      </span>
+                      <select value={updateForm.cadence}
+                        onChange={(e) => setUpdateForm((c) => ({ ...c, cadence: e.target.value }))}>
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="adhoc">Ad hoc</option>
+                      </select>
+                    </label>
+                    <label className="automation-field">
+                      <span className="automation-field-label">
+                        <BookOpen size={14} />
+                        <span>Output</span>
+                      </span>
+                      <select value={updateForm.outputFormat}
+                        onChange={(e) => setUpdateForm((c) => ({ ...c, outputFormat: e.target.value }))}>
+                        <option value="pdf">PDF</option>
+                        <option value="pptx">PPTX</option>
+                        <option value="docx">DOCX</option>
+                      </select>
+                    </label>
+                    <label className="automation-field automation-field-full">
+                      <span className="automation-field-label">
+                        <BarChart3 size={14} />
+                        <span>Report type</span>
+                      </span>
+                      <select value={updateForm.family}
+                        onChange={(e) => setUpdateForm((c) => ({ ...c, family: e.target.value }))}>
+                        {FAMILIES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                      </select>
+                    </label>
+                    <label className="automation-field automation-field-full">
+                      <span className="automation-field-label">
+                        <TrendingUp size={14} />
+                        <span>Instruments</span>
+                      </span>
+                      <textarea rows={2} value={updateForm.instruments}
+                        onChange={(e) => setUpdateForm((c) => ({ ...c, instruments: e.target.value }))}
+                        placeholder="EURUSD, XAUUSD, Brent, SPY" />
+                    </label>
+                    <label className="automation-field automation-field-full">
+                      <span className="automation-field-label">
+                        <Plug size={14} />
+                        <span>Connectors</span>
+                      </span>
+                      <input value={updateForm.connectors}
+                        onChange={(e) => setUpdateForm((c) => ({ ...c, connectors: e.target.value }))}
+                        placeholder="premium-primary, bloomberg (comma-separated)" />
+                    </label>
+                  </div>
+                  <div className="modal-actions">
+                    <button type="button" className="btn btn-ghost" onClick={() => setShowNewAutomation(false)}>Cancel</button>
+                    <button type="submit" className="btn btn-primary" disabled={!!busy}>Create automation</button>
+                  </div>
+                </form>
+              </div>
+            )}
           </div>
           )}
 
           {tab === "finder" && (
-          <div className="std-view">
-            <div className="std-header">
-              <h2>Report Finder</h2>
-            </div>
-            <div className="two-col">
-              <form className="panel" onSubmit={onFinderSubmit}>
-                <div className="panel-heading">Find &amp; download reports</div>
-                <label>
-                  Task title
-                  <input value={finderForm.title}
-                    onChange={(e) => setFinderForm((c) => ({ ...c, title: e.target.value }))} required />
-                </label>
-                <div className="field-row">
-                  <label>
-                    Project
-                    <select value={finderForm.projectId}
-                      onChange={(e) => setFinderForm((c) => ({ ...c, projectId: e.target.value }))}>
-                      <option value="">None</option>
-                      {state.projects.map((p) =>
-                        <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                  </label>
-                  <label>
-                    Source site
-                    <input value={finderForm.sourceSite}
-                      onChange={(e) => setFinderForm((c) => ({ ...c, sourceSite: e.target.value }))} />
-                  </label>
-                </div>
-                <label>
-                  What do you want to find?
-                  <textarea rows={5} value={finderForm.request}
-                    onChange={(e) => setFinderForm((c) => ({ ...c, request: e.target.value }))}
-                    placeholder="Find the strongest recent Broadcom AI supplier reports with valuation detail, then download the best three." required />
-                </label>
-                <div className="picker-row" style={{ marginBottom: 16 }}>
-                  <button type="button" className="btn btn-ghost btn-sm"
-                    onClick={async () => {
-                      const p = await choosePaths("folders");
-                      setFinderForm((c) => ({ ...c, downloadPaths: p }));
-                    }}>
-                    + Download folder
-                  </button>
-                  {finderForm.downloadPaths.length > 0 &&
-                    <span className="picker-label">{finderForm.downloadPaths.length} selected</span>}
-                </div>
-                <div className="finder-btn-row">
-                  <button className="btn btn-primary" disabled={!!busy}>Stage workspace</button>
-                  <button type="button" className="btn btn-teal" disabled={!!busy || !finderForm.request.trim()}
-                    onClick={async () => { await withBusy("Launching browser", runFinderRecipe); }}>
-                    Run browser worker
+          <div className="finder-view">
+            <div className="chat-stage finder-chat-stage">
+              <form className="chat-area finder-chat-area finder-minimal" onSubmit={async (e) => {
+                e.preventDefault();
+                if (!finderForm.request.trim()) return;
+                await withBusy("Launching browser", runFinderRecipe);
+              }}>
+                <textarea
+                  className="chat-textarea"
+                  rows={3}
+                  placeholder="What do you want to find on visionalpha?"
+                  value={finderForm.request}
+                  onChange={(e) => setFinderForm((c) => ({ ...c, request: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                      e.preventDefault();
+                      (e.currentTarget.form as HTMLFormElement)?.requestSubmit();
+                    }
+                  }}
+                />
+                <div className="chat-actions finder-actions-minimal">
+                  <button
+                    type="submit"
+                    className="finder-arrow-btn"
+                    disabled={!!busy || !finderForm.request.trim()}
+                    title="Run browser worker"
+                  >
+                    →
                   </button>
                 </div>
               </form>
               {finderLog && (
-                <div className="finder-log-wrap">
+                <div className="finder-log-inline">
                   <div className="dj-label-row">
                     <span className="dj-label">Browser worker</span>
                     {finderStatus === "running" && <span className="live-dot" />}
-                    {finderStatus !== "running" && <span className="dj-label" style={{ color: finderStatus === "done" ? "var(--ok)" : "var(--warn)" }}>{finderStatus}</span>}
+                    {finderStatus !== "running" && <span className="dj-label" style={{ color: finderStatus === "done" ? "var(--success)" : "var(--danger)" }}>{finderStatus}</span>}
                   </div>
                   <pre className="job-log">{finderLog}</pre>
                 </div>
               )}
-
-              <div className="panel">
-                <div className="panel-heading">Site recipes</div>
-                <p className="empty-copy">
-                  The recipe engine is scaffolded. Add site-specific automation to
-                  <code> notes/report-finder-recipes.md</code>.
-                </p>
-                <button className="btn btn-ghost btn-sm" style={{ marginTop: 14 }}
-                  onClick={() => window.desktop?.openPath?.(state.finder_notes_path)}>
-                  Open recipe notes
-                </button>
-              </div>
             </div>
           </div>
         )}
@@ -1136,7 +1306,7 @@ function App() {
                 onClick={() => setShowTerminal(false)}
                 aria-label="Close"
               >
-                ×
+                <X size={16} strokeWidth={2.5} />
               </button>
             </div>
             <div className="terminal-output-wrap">

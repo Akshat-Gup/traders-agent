@@ -8,7 +8,9 @@ interface DesktopBridge {
     title?: string;
   }) => Promise<string[]>;
   openPath: (path: string) => Promise<string>;
-   getBackendLog: () => Promise<string>;
+  getBackendLog: () => Promise<string>;
+  getPathForFile: (file: File) => string;
+  focusTerminal: () => Promise<void>;
 }
 
 declare global {

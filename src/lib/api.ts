@@ -14,20 +14,30 @@ async function baseUrl(): Promise<string> {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${await baseUrl()}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers || {})
-    },
-    ...init
-  });
-
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(detail || `Request failed with ${response.status}`);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20_000);
+  try {
+    const response = await fetch(`${await baseUrl()}${path}`, {
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(init?.headers || {})
+      },
+      ...init
+    });
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(detail || `Request failed with ${response.status}`);
+    }
+    return response.json() as Promise<T>;
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new Error("Request timed out — is the backend running?");
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
   }
-
-  return response.json() as Promise<T>;
 }
 
 export const api = {
