@@ -25,7 +25,10 @@ interface CodexSessionSnapshot {
   codexStatus: string;
   lastEventAt: string | null;
   agentText: string;
+  agentMessages: Array<{ id: string; text: string; status: string }>;
+  reasoningSummary: string;
   commandOutput: string;
+  planText: string;
   fileChanges: Array<{ path: string; kind: { type: string; move_path?: string | null }; diff: string }>;
   approvals: CodexApproval[];
   lastError: string | null;

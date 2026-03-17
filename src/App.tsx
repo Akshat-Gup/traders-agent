@@ -83,7 +83,10 @@ type CodexSession = {
   codexStatus: string;
   lastEventAt: string | null;
   agentText: string;
+  agentMessages: { id: string; text: string; status: string }[];
+  reasoningSummary: string;
   commandOutput: string;
+  planText: string;
   fileChanges: CodexFileChange[];
   approvals: CodexApproval[];
   lastError: string | null;
@@ -223,7 +226,10 @@ function buildSessionFromJob(job: JobRecord | null): CodexSession | null {
     codexStatus: job.codex_status || "idle",
     lastEventAt: job.last_event_at || null,
     agentText: job.last_agent_text || "",
+    agentMessages: job.last_agent_text ? [{ id: `${job.id}-persisted`, text: job.last_agent_text, status: "completed" }] : [],
+    reasoningSummary: "",
     commandOutput: job.last_command_output || "",
+    planText: "",
     fileChanges: [],
     approvals: [],
     lastError: null,
@@ -861,58 +867,173 @@ function App() {
   }
 
   function renderAssistantContent(text: string, emptyCopy: string) {
-    const normalized = text.replace(/\r\n/g, "\n").trim();
-    if (!normalized) {
+    const normalized = text.replace(/\r\n/g, "\n").trimEnd();
+    if (!normalized.trim()) {
       return <p className="jv-stream-empty">{emptyCopy}</p>;
     }
+    const lines = normalized.split("\n");
+    const nodes: ReactNode[] = [];
+    let inCodeBlock = false;
+    let codeLines: string[] = [];
+    let key = 0;
 
-    const blocks = normalized
-      .split(/\n{2,}/)
-      .map((block) => block.trim())
-      .filter(Boolean);
+    const pushCodeBlock = () => {
+      if (!codeLines.length) return;
+      nodes.push(
+        <pre className="assistant-stream-code" key={`code-${key++}`}>
+          {codeLines.join("\n")}
+        </pre>
+      );
+      codeLines = [];
+    };
+
+    for (const rawLine of lines) {
+      const line = rawLine.replace(/\s+$/u, "");
+      if (line.trim().startsWith("```")) {
+        if (inCodeBlock) {
+          pushCodeBlock();
+          inCodeBlock = false;
+        } else {
+          inCodeBlock = true;
+        }
+        continue;
+      }
+
+      if (inCodeBlock) {
+        codeLines.push(rawLine);
+        continue;
+      }
+
+      if (!line.trim()) {
+        nodes.push(<div className="assistant-stream-spacer" key={`spacer-${key++}`} aria-hidden="true" />);
+        continue;
+      }
+
+      const bulletMatch = line.match(/^[-*]\s+(.*)$/);
+      if (bulletMatch) {
+        nodes.push(
+          <div className="assistant-stream-line assistant-stream-line-bullet" key={`line-${key++}`}>
+            <span className="assistant-stream-line-marker">-</span>
+            <span>{renderInlineText(bulletMatch[1])}</span>
+          </div>
+        );
+        continue;
+      }
+
+      const numberedMatch = line.match(/^(\d+\.)\s+(.*)$/);
+      if (numberedMatch) {
+        nodes.push(
+          <div className="assistant-stream-line assistant-stream-line-bullet" key={`line-${key++}`}>
+            <span className="assistant-stream-line-marker">{numberedMatch[1]}</span>
+            <span>{renderInlineText(numberedMatch[2])}</span>
+          </div>
+        );
+        continue;
+      }
+
+      nodes.push(
+        <p className="assistant-stream-line" key={`line-${key++}`}>
+          {renderInlineText(line)}
+        </p>
+      );
+    }
+
+    pushCodeBlock();
 
     return (
       <div className="assistant-stream" ref={agentLogRef}>
-        {blocks.map((block, index) => {
-          const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
-          const isBulletList = lines.length > 0 && lines.every((line) => /^[-*]\s+/.test(line));
-          const isNumberedList = lines.length > 0 && lines.every((line) => /^\d+\.\s+/.test(line));
-          const isCodeBlock = block.startsWith("```") && block.endsWith("```");
+        {nodes}
+      </div>
+    );
+  }
 
-          if (isCodeBlock) {
-            return (
-              <pre className="assistant-stream-code" key={index}>
-                {block.replace(/^```[^\n]*\n?/, "").replace(/\n?```$/, "")}
-              </pre>
-            );
-          }
+  function renderActivityFeed(session: CodexSession | null, emptyCopy: string) {
+    if (!session) {
+      return <p className="jv-stream-empty">{emptyCopy}</p>;
+    }
 
-          if (isBulletList) {
-            return (
-              <ul className="assistant-stream-list" key={index}>
-                {lines.map((line, lineIndex) => (
-                  <li key={lineIndex}>{renderInlineText(line.replace(/^[-*]\s+/, ""))}</li>
-                ))}
-              </ul>
-            );
-          }
+    const hasContent = Boolean(
+      session.reasoningSummary.trim() ||
+      session.planText.trim() ||
+      session.agentText.trim() ||
+      session.commandOutput.trim() ||
+      session.approvals.length ||
+      session.lastError
+    );
 
-          if (isNumberedList) {
-            return (
-              <ol className="assistant-stream-list assistant-stream-list-numbered" key={index}>
-                {lines.map((line, lineIndex) => (
-                  <li key={lineIndex}>{renderInlineText(line.replace(/^\d+\.\s+/, ""))}</li>
-                ))}
-              </ol>
-            );
-          }
-
-          return (
-            <p className="assistant-stream-paragraph" key={index}>
-              {renderInlineText(lines.join(" "))}
+    if (!hasContent) {
+      return (
+        <div className="assistant-stream" ref={agentLogRef}>
+          <div className="activity-card activity-card-status">
+            <div className="activity-card-label">Status</div>
+            <p className="activity-card-text">
+              {session.running ? `Codex is ${session.codexStatus || "running"} in this workspace.` : emptyCopy}
             </p>
-          );
-        })}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="assistant-stream" ref={agentLogRef}>
+        <div className="activity-card activity-card-status">
+          <div className="activity-card-label">Status</div>
+          <p className="activity-card-text">
+            {session.running
+              ? `Codex is ${session.codexStatus || "running"}${session.lastEventAt ? ` · last update ${formatTimestamp(session.lastEventAt)}` : ""}`
+              : `Latest state: ${session.codexStatus || "idle"}`}
+          </p>
+        </div>
+
+        {session.reasoningSummary.trim() && (
+          <div className="activity-card activity-card-thinking">
+            <div className="activity-card-label">Thinking summary</div>
+            <pre className="activity-card-code">{session.reasoningSummary.trim()}</pre>
+          </div>
+        )}
+
+        {session.planText.trim() && (
+          <div className="activity-card activity-card-plan">
+            <div className="activity-card-label">Plan</div>
+            <pre className="activity-card-code">{session.planText.trim()}</pre>
+          </div>
+        )}
+
+        {session.commandOutput.trim() && (
+          <div className="activity-card activity-card-command">
+            <div className="activity-card-label">Working</div>
+            <pre className="activity-card-code">{session.commandOutput.trim()}</pre>
+          </div>
+        )}
+
+        {session.approvals.length > 0 && (
+          <div className="activity-card activity-card-approval">
+            <div className="activity-card-label">Waiting for approval</div>
+            <div className="activity-card-approvals">{renderApprovalList(session.approvals)}</div>
+          </div>
+        )}
+
+        {session.agentText.trim() && (
+          <div className="activity-card activity-card-assistant">
+            <div className="activity-card-label">Assistant</div>
+            <div className="activity-message-list">
+              {(session.agentMessages.length ? session.agentMessages : [{ id: "fallback", text: session.agentText, status: "completed" }])
+                .filter((message) => message.text.trim())
+                .map((message) => (
+                  <div className="activity-message" key={message.id}>
+                    {renderAssistantContent(message.text, emptyCopy)}
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
+        {session.lastError && (
+          <div className="activity-card activity-card-error">
+            <div className="activity-card-label">Error</div>
+            <p className="activity-card-text">{session.lastError}</p>
+          </div>
+        )}
       </div>
     );
   }
@@ -1307,8 +1428,8 @@ function App() {
           {/* ── Left: stream + reply ── */}
           <div className="jv-main">
             <div className="jv-stream-wrap">
-              {renderAssistantContent(
-                session?.agentText || "",
+              {renderActivityFeed(
+                session,
                 "Assistant updates will stream here as the run progresses."
               )}
             </div>
@@ -1343,18 +1464,6 @@ function App() {
 
           {/* ── Right: outputs + context ── */}
           <div className="jv-side">
-            {/* Pending approvals — only when present */}
-            {hasApprovals && (
-              <div className="jv-panel">
-                <div className="jv-panel-head">
-                  <span>Pending approvals</span>
-                </div>
-                <div className="jv-panel-body">
-                  {renderApprovalList(session?.approvals || [])}
-                </div>
-              </div>
-            )}
-
             {session?.lastError && (
               <div className="session-error">{session.lastError}</div>
             )}

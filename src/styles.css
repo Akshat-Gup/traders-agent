@@ -2626,12 +2626,92 @@ select {
   padding: 4px 2px 4px 0;
 }
 
+.activity-card {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--panel);
+  padding: 12px 14px;
+}
+
+.activity-card-label {
+  margin-bottom: 8px;
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.activity-card-text {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.activity-card-code {
+  margin: 0;
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  border-radius: 14px;
+}
+
+.activity-card-assistant .assistant-stream {
+  min-height: 0;
+  max-height: none;
+  padding: 0;
+}
+
+.activity-message-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.activity-message {
+  padding-top: 2px;
+}
+
+.activity-message + .activity-message {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.activity-card-approvals .approval-list {
+  margin: 0;
+}
+
 .assistant-stream-paragraph,
+.assistant-stream-line,
 .assistant-stream-list {
   margin: 0;
   color: var(--text);
   font-size: 13.5px;
   line-height: 1.72;
+}
+
+.assistant-stream-line {
+  white-space: pre-wrap;
+}
+
+.assistant-stream-line-bullet {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.assistant-stream-line-marker {
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.assistant-stream-spacer {
+  min-height: 8px;
 }
 
 .assistant-stream-list {
@@ -2645,7 +2725,7 @@ select {
 .assistant-stream-code {
   margin: 0;
   padding: 13px 16px;
-  border-radius: var(--r-sm);
+  border-radius: 14px;
   border: 1px solid var(--border);
   background: var(--inset);
   color: var(--text-2);
@@ -2720,7 +2800,7 @@ select {
 }
 
 .session-error {
-  border-radius: 14px;
+  border-radius: 18px;
   padding: 14px 16px;
   background: rgba(181, 57, 40, 0.08);
   border: 1px solid rgba(181, 57, 40, 0.16);
@@ -2738,7 +2818,7 @@ select {
 .approval-card,
 .file-change-card {
   border: 1.5px solid var(--border);
-  border-radius: var(--r);
+  border-radius: 18px;
   padding: 12px 14px;
   background: var(--surface);
   box-shadow: var(--shadow-sm);

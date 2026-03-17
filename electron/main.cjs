@@ -62,7 +62,10 @@ function emptySession(job) {
     codexStatus: job.codex_status || "idle",
     lastEventAt: job.last_event_at || null,
     agentText: job.last_agent_text || "",
+    agentMessages: [],
+    reasoningSummary: "",
     commandOutput: job.last_command_output || "",
+    planText: "",
     fileChanges: [],
     approvals: [],
     lastError: null,
@@ -117,6 +120,25 @@ function updateSession(jobId, updater, extraPersist = {}) {
   return session;
 }
 
+function upsertAgentMessage(session, itemId, patch) {
+  const normalizedId = itemId || `agent-${session.agentMessages.length + 1}`;
+  const existing = session.agentMessages.find((entry) => entry.id === normalizedId);
+  if (existing) {
+    Object.assign(existing, patch);
+  } else {
+    session.agentMessages.push({
+      id: normalizedId,
+      text: "",
+      status: "streaming",
+      ...patch,
+    });
+  }
+  session.agentText = session.agentMessages
+    .map((entry) => String(entry.text || "").trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 function resolveJobIdFromThread(threadId) {
   if (!threadId) return null;
   return threadToJob.get(threadId) || null;
@@ -126,6 +148,31 @@ function normalizeSandboxMode(value) {
   if (value === "danger-full-access") return "danger-full-access";
   if (value === "read-only") return "read-only";
   return "workspace-write";
+}
+
+function buildTurnSandboxPolicy(settings) {
+  const sandboxMode = normalizeSandboxMode(settings.sandbox);
+  const networkEnabled = settings.web_search !== "off";
+  if (sandboxMode === "danger-full-access") {
+    return {
+      type: "dangerFullAccess",
+    };
+  }
+  if (sandboxMode === "read-only") {
+    return {
+      type: "readOnly",
+      access: { type: "fullAccess" },
+      networkAccess: networkEnabled,
+    };
+  }
+  return {
+    type: "workspaceWrite",
+    readOnlyAccess: { type: "fullAccess" },
+    writableRoots: [],
+    networkAccess: networkEnabled,
+    excludeTmpdirEnvVar: false,
+    excludeSlashTmp: false,
+  };
 }
 
 function buildRunInstruction(job) {
@@ -140,6 +187,30 @@ function buildRunInstruction(job) {
     parts.push("Use web research when needed to make the update current.");
   }
   return parts.join(" ");
+}
+
+function buildTurnInput(job) {
+  const input = [
+    {
+      type: "text",
+      text: buildRunInstruction(job),
+    },
+  ];
+  const recentUserNotes = (job.question_log || [])
+    .filter((entry) => entry?.role === "user" && typeof entry.content === "string" && entry.content.trim())
+    .slice(-5);
+  if (recentUserNotes.length) {
+    input.push({
+      type: "text",
+      text: [
+        "Latest user guidance for this turn:",
+        ...recentUserNotes.map((entry, index) => `${index + 1}. ${entry.content.trim()}`),
+        "",
+        "Treat this guidance as higher priority than earlier assumptions and adjust the run accordingly.",
+      ].join("\n"),
+    });
+  }
+  return input;
 }
 
 async function ensureCodexReady() {
@@ -246,13 +317,10 @@ async function launchJob(jobId) {
     threadId,
     cwd: job.workspace_path,
     approvalPolicy: settings.approval_policy,
+    sandboxPolicy: buildTurnSandboxPolicy(settings),
     personality: settings.personality,
-    input: [
-      {
-        type: "text",
-        text: buildRunInstruction(localState.getJob(jobId)),
-      },
-    ],
+    summary: "detailed",
+    input: buildTurnInput(localState.getJob(jobId)),
   });
 
   updateSession(
@@ -350,9 +418,32 @@ function handleNotification(message) {
     return;
   }
 
+  if (message.method === "item/plan/delta") {
+    updateSession(jobId, (session) => {
+      session.planText += params.delta || "";
+      session.running = true;
+      session.codexStatus = "running";
+      session.activeTurnId = params.turnId;
+    });
+    return;
+  }
+
   if (message.method === "item/agentMessage/delta") {
     updateSession(jobId, (session) => {
-      session.agentText += params.delta || "";
+      upsertAgentMessage(session, params.itemId || null, {
+        text: `${session.agentMessages.find((entry) => entry.id === (params.itemId || null))?.text || ""}${params.delta || ""}`,
+        status: "streaming",
+      });
+      session.running = true;
+      session.codexStatus = "running";
+      session.activeTurnId = params.turnId;
+    });
+    return;
+  }
+
+  if (message.method === "item/reasoning/summaryTextDelta") {
+    updateSession(jobId, (session) => {
+      session.reasoningSummary += params.delta || "";
       session.running = true;
       session.codexStatus = "running";
       session.activeTurnId = params.turnId;
@@ -374,8 +465,11 @@ function handleNotification(message) {
     const item = params.item || {};
     updateSession(jobId, (session) => {
       session.activeTurnId = params.turnId || session.activeTurnId;
-      if (item.type === "agentMessage" && typeof item.text === "string" && item.text.length >= session.agentText.length) {
-        session.agentText = item.text;
+      if (item.type === "agentMessage" && typeof item.text === "string") {
+        upsertAgentMessage(session, item.id || null, {
+          text: item.text,
+          status: item.status || "completed",
+        });
       }
       if (item.type === "commandExecution" && typeof item.aggregatedOutput === "string" && item.aggregatedOutput.length >= session.commandOutput.length) {
         session.commandOutput = item.aggregatedOutput;
@@ -385,6 +479,9 @@ function handleNotification(message) {
         if (item.status === "completed") {
           session.approvals = session.approvals.filter((approval) => approval.itemId !== item.id);
         }
+      }
+      if (item.type === "plan" && typeof item.text === "string" && item.text.length >= session.planText.length) {
+        session.planText = item.text;
       }
       if (message.method === "item/completed" && item.type === "commandExecution" && item.status === "failed") {
         session.lastError = `Command failed${typeof item.exitCode === "number" ? ` (exit ${item.exitCode})` : ""}`;

@@ -27,8 +27,8 @@ const BUILTIN_TEMPLATES = [
 
 function defaultSettings() {
   return {
-    approval_policy: "on-request",
-    sandbox: "workspace-write",
+    approval_policy: "never",
+    sandbox: "danger-full-access",
     personality: "friendly",
     web_search: "live",
   };
@@ -324,13 +324,14 @@ function createWorkspace(job) {
     status: job.status,
     updated_at: job.updated_at,
   });
+  const settings = readSettings();
   writeJsonFile(path.join(dirs.context, "run-config.json"), {
     workspace_path: job.workspace_path,
     result_path: job.result_path,
     family: job.family,
     output_format: job.output_format,
-    approval_policy: "on-request",
-    sandbox: "workspace-write",
+    approval_policy: settings.approval_policy,
+    sandbox: settings.sandbox,
   });
   return job;
 }
