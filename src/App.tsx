@@ -24,7 +24,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { api } from "./lib/api";
-import type { AppState, IntakeQuestion, JobKind, JobRecord } from "./lib/types";
+import type { AppState, IntakeQuestion, JobKind, JobRecord, UpdateDefinitionRecord } from "./lib/types";
 import logoSrc from "./logo.jpg";
 
 const PROJECT_ICONS: LucideIcon[] = [
@@ -113,14 +113,56 @@ const EMPTY_STATE: AppState = {
   update_definitions: []
 };
 
-const FAMILIES = [
-  { value: "equity-research", label: "Equity Research" },
-  { value: "quarterly-stock-update", label: "Quarterly Update" },
-  { value: "commodity-report", label: "Commodity Report" },
-  { value: "weekly-commodity-update", label: "Weekly Commodity" },
-  { value: "case-comp", label: "Case Comp / AM" },
-  { value: "macro-update", label: "Macro Recap" }
-];
+const AUTOMATION_ASSET_CLASSES = [
+  {
+    id: "equities",
+    label: "Equities",
+    desc: "Single-name, sector, and earnings-driven research with Alpha Vantage market data.",
+    family: "equity-research",
+    outputs: ["PPTX", "PDF"],
+    icon: BarChart3,
+  },
+  {
+    id: "macro",
+    label: "Macro",
+    desc: "Cross-asset market recap with catalysts, rates, and positioning context.",
+    family: "macro-update",
+    outputs: ["PPTX", "PDF"],
+    icon: PieChart,
+  },
+  {
+    id: "commodities",
+    label: "Commodities",
+    desc: "Supply, demand, inventories, and price-action monitoring for key commodity markets.",
+    family: "commodity-report",
+    outputs: ["PPTX", "PDF"],
+    icon: Package,
+  },
+  {
+    id: "fx",
+    label: "FX",
+    desc: "Currency moves, rate differentials, and macro drivers across major crosses.",
+    family: "macro-update",
+    outputs: ["PPTX", "PDF"],
+    icon: TrendingUp,
+  },
+  {
+    id: "rates",
+    label: "Rates",
+    desc: "Yield-curve, central-bank, and fixed-income market updates for rate-sensitive books.",
+    family: "macro-update",
+    outputs: ["PPTX", "PDF"],
+    icon: Layers,
+  },
+  {
+    id: "multi-asset",
+    label: "Multi-Asset",
+    desc: "Top-down portfolio view across equities, rates, FX, and commodities.",
+    family: "macro-update",
+    outputs: ["PPTX", "PDF"],
+    icon: Briefcase,
+  },
+] as const;
 
 // Preconfigured template cards (user-curated style packs)
 const TEMPLATE_CARDS = [
@@ -192,6 +234,8 @@ const FORMAT_OPTIONS: { value: string; label: string; icon: ReactNode }[] = [
   { value: "pdf",  label: "PDF",  icon: <BookOpen size={13} /> },
 ];
 
+const AUTOMATION_FORMAT_OPTIONS = FORMAT_OPTIONS.filter((option) => option.value !== "docx");
+
 const tabs: { key: TabKey; label: string; icon: string }[] = [
   { key: "research", label: "Research", icon: "◈" },
   { key: "automation", label: "Automation", icon: "⟳" },
@@ -200,6 +244,21 @@ const tabs: { key: TabKey; label: string; icon: string }[] = [
 
 function csvToList(value: string) {
   return value.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+function automationAssetClassById(assetClassId: string | null | undefined) {
+  return AUTOMATION_ASSET_CLASSES.find((assetClass) => assetClass.id === assetClassId) || AUTOMATION_ASSET_CLASSES[0];
+}
+
+function automationRunLabel(run: JobRecord | null) {
+  if (!run?.period_start || !run.period_end) {
+    return run?.scheduled_for ? formatTimestamp(run.scheduled_for) : "Run pending";
+  }
+  return `${new Date(run.period_start).toLocaleDateString()} to ${new Date(run.period_end).toLocaleDateString()}`;
+}
+
+function firstOutputPath(outputs: JobArtifact[] | undefined) {
+  return outputs?.[0]?.path || null;
 }
 
 function formatAccountTitle(account: CodexAccount | null) {
@@ -304,10 +363,7 @@ function App() {
   const [showFormatPicker, setShowFormatPicker] = useState(false);
   const [valuationRequired, setValuationRequired] = useState(false);
   const [enabledConnectors, setEnabledConnectors] = useState<Record<string, boolean>>({
-    bloomberg: false,
-    refinitiv: false,
-    factset: false,
-    alpha_vantage: false,
+    alpha_vantage: true,
   });
   const [isDragOver, setIsDragOver] = useState(false);
   // Intake question flow
@@ -327,23 +383,25 @@ function App() {
 
   // Update definition form
   const [updateForm, setUpdateForm] = useState({
-    name: "", cadence: "daily", family: "macro-update", outputFormat: "pdf",
-    instruments: "EURUSD, XAUUSD, Brent, SPY", templateId: "",
-    connectors: "premium-primary"
+    name: "",
+    prompt: "",
+    cadence: "daily",
+    weekday: "monday",
+    timeOfDay: "08:00",
+    outputFormat: "pdf",
+    assetClassId: "equities",
   });
 
   // Finder form
   const [finderForm, setFinderForm] = useState({
-    title: "", projectId: "", sourceSite: "visionalpha-internal", request: "",
-    downloadPaths: [] as string[], outputFormat: "pdf"
+    title: "",
+    request: "",
   });
-  const [finderRecipeId, setFinderRecipeId] = useState<string | null>(null);
-  const [finderLog, setFinderLog] = useState("");
-  const [finderStatus, setFinderStatus] = useState("");
 
   // Jobs
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [selectedAutomationId, setSelectedAutomationId] = useState<string | null>(null);
+  const [selectedFinderJobId, setSelectedFinderJobId] = useState<string | null>(null);
   const [qaText, setQaText] = useState("");
   const autoOpenedJobsRef = useRef<Set<string>>(new Set());
   const selectedJob = useMemo(
@@ -365,6 +423,11 @@ function App() {
     [selectedTemplate]
   );
 
+  const selectedAutomationAssetClass = useMemo(
+    () => automationAssetClassById(updateForm.assetClassId),
+    [updateForm.assetClassId]
+  );
+
   const allowedFormatValues = useMemo(() => {
     if (!selectedTemplateCard) {
       return FORMAT_OPTIONS.map((option) => option.value);
@@ -377,6 +440,13 @@ function App() {
     [state.jobs, activeProjectId]
   );
 
+  const automationDefinitions = useMemo(
+    () => [...state.update_definitions].sort((a, b) =>
+      (b.updated_at || "").localeCompare(a.updated_at || "")
+    ),
+    [state.update_definitions]
+  );
+
   const automationJobs = useMemo(
     () => state.jobs.filter((j) => j.kind === "update").sort((a, b) =>
       (b.updated_at || "").localeCompare(a.updated_at || "")
@@ -385,8 +455,35 @@ function App() {
   );
 
   const selectedAutomation = useMemo(
-    () => automationJobs.find((j) => j.id === selectedAutomationId) || null,
+    () => automationDefinitions.find((definition) => definition.id === selectedAutomationId) || null,
+    [automationDefinitions, selectedAutomationId]
+  );
+
+  const selectedAutomationRuns = useMemo(
+    () => automationJobs.filter((job) => job.update_definition_id === selectedAutomationId),
     [automationJobs, selectedAutomationId]
+  );
+
+  const selectedAutomationRun = useMemo(
+    () => selectedAutomationRuns.find((job) => job.id === selectedJobId) || selectedAutomationRuns[0] || null,
+    [selectedAutomationRuns, selectedJobId]
+  );
+
+  const finderJobs = useMemo(
+    () => state.jobs.filter((job) => job.kind === "finder").sort((a, b) =>
+      (b.updated_at || "").localeCompare(a.updated_at || "")
+    ),
+    [state.jobs]
+  );
+
+  const selectedFinderJob = useMemo(
+    () => finderJobs.find((job) => job.id === selectedFinderJobId) || finderJobs[0] || null,
+    [finderJobs, selectedFinderJobId]
+  );
+
+  const selectedFinderSession = useMemo(
+    () => sessions[selectedFinderJob?.id || ""] || buildSessionFromJob(selectedFinderJob),
+    [selectedFinderJob, sessions]
   );
 
   async function refreshState() {
@@ -578,21 +675,21 @@ function App() {
 
   // Automation log polling (when viewing automation tab)
   useEffect(() => {
-    if (!selectedAutomation || selectedAutomation.status !== "agent_running") {
+    if (!selectedAutomationRun || selectedAutomationRun.status !== "agent_running") {
       setActiveAutomationLog("");
       return;
     }
     let active = true;
     const poll = async () => {
       try {
-        const { log } = await api.jobLogs(selectedAutomation.id);
+        const { log } = await api.jobLogs(selectedAutomationRun.id);
         if (active) setActiveAutomationLog(log);
       } catch { /* ignore */ }
     };
     poll();
     const id = setInterval(poll, 2000);
     return () => { active = false; clearInterval(id); };
-  }, [selectedAutomation?.id, selectedAutomation?.status]);
+  }, [selectedAutomationRun?.id, selectedAutomationRun?.status]);
 
   // Auto-scroll job log
   useEffect(() => {
@@ -612,6 +709,32 @@ function App() {
     refreshSession(selectedJobId);
     refreshArtifacts(selectedJobId);
   }, [selectedJobId]);
+
+  useEffect(() => {
+    if (!selectedAutomationRun?.id) return;
+    refreshSession(selectedAutomationRun.id);
+    refreshArtifacts(selectedAutomationRun.id);
+  }, [selectedAutomationRun?.id]);
+
+  useEffect(() => {
+    if (!selectedFinderJob?.id) return;
+    refreshSession(selectedFinderJob.id);
+    refreshArtifacts(selectedFinderJob.id);
+  }, [selectedFinderJob?.id]);
+
+  useEffect(() => {
+    if (!automationDefinitions.length) return;
+    if (!selectedAutomationId || !automationDefinitions.some((definition) => definition.id === selectedAutomationId)) {
+      setSelectedAutomationId(automationDefinitions[0].id);
+    }
+  }, [automationDefinitions, selectedAutomationId]);
+
+  useEffect(() => {
+    if (!finderJobs.length) return;
+    if (!selectedFinderJobId || !finderJobs.some((job) => job.id === selectedFinderJobId)) {
+      setSelectedFinderJobId(finderJobs[0].id);
+    }
+  }, [finderJobs, selectedFinderJobId]);
 
   useEffect(() => {
     if (!allowedFormatValues.includes(jobOutputFormat)) {
@@ -637,21 +760,6 @@ function App() {
     outputs.slice(0, 2).forEach((output) => window.desktop?.openPath?.(output.path));
     setMessage("Opened the generated outputs.");
   }, [jobArtifacts, selectedJob]);
-
-  // Finder recipe log polling
-  useEffect(() => {
-    if (!finderRecipeId || finderStatus === "done" || finderStatus === "error") return;
-    let active = true;
-    const poll = async () => {
-      try {
-        const { log, status } = await api.finderLog(finderRecipeId);
-        if (active) { setFinderLog(log); setFinderStatus(status); }
-      } catch { /* ignore */ }
-    };
-    poll();
-    const id = setInterval(poll, 2000);
-    return () => { active = false; clearInterval(id); };
-  }, [finderRecipeId, finderStatus]);
 
   // Question polling for running jobs
   useEffect(() => {
@@ -712,14 +820,14 @@ function App() {
         output_format: jobOutputFormat,
         project_id: activeProjectId || null,
         template_id: selectedTemplate || null,
-        provider_names: ["stub"],
+        provider_names: ["alpha_vantage"],
         source_paths: jobSources,
         urls: [],
         custom_instructions: "",
         intake_answers: {},
         question_prompts: [],
         valuation_required: valuationRequired,
-        enabled_connectors: Object.keys(enabledConnectors).filter(k => enabledConnectors[k]),
+        enabled_connectors: ["alpha_vantage"],
       });
       const jobId = (job as any).id as string;
       setSelectedJobId(jobId);
@@ -737,51 +845,67 @@ function App() {
 
   async function onUpdateSubmit(e: FormEvent) {
     e.preventDefault();
+    const assetClass = automationAssetClassById(updateForm.assetClassId);
     await withBusy("Creating automation", async () => {
-      await api.createUpdateDefinition({
-        name: updateForm.name, cadence: updateForm.cadence, family: updateForm.family,
-        output_format: updateForm.outputFormat, instruments: csvToList(updateForm.instruments),
-        template_id: updateForm.templateId || null,
-        connectors: csvToList(updateForm.connectors)
+      const definition = await api.createUpdateDefinition({
+        name: updateForm.name,
+        prompt: updateForm.prompt,
+        cadence: updateForm.cadence,
+        family: assetClass.family,
+        asset_class_id: assetClass.id,
+        asset_class_label: assetClass.label,
+        time_of_day: updateForm.timeOfDay,
+        weekday: updateForm.weekday,
+        output_format: updateForm.outputFormat,
       });
       setMessage("Automation created.");
-      setUpdateForm((c) => ({ ...c, name: "" }));
+      setSelectedAutomationId((definition as UpdateDefinitionRecord).id);
+      setUpdateForm((current) => ({ ...current, name: "", prompt: "" }));
       setShowNewAutomation(false);
       await refreshState();
     });
   }
 
-  async function runFinderRecipe() {
-    const downloadDir = finderForm.downloadPaths[0] ?? "";
-    const recipe = {
-      site: finderForm.sourceSite,
-      start_url: `https://${finderForm.sourceSite.replace(/-internal$/, "")}.com`,
-      headless: false,
-      search: { query: finderForm.request, field_selector: "input[type=search],input[name=q]", submit_selector: "button[type=submit]" },
-      download_links: { link_selector: "a[href$='.pdf']", file_types: [".pdf"], max_files: 10 },
-    };
-    const { recipe_id } = await api.runFinder({ recipe, download_dir: downloadDir });
-    setFinderRecipeId(recipe_id);
-    setFinderStatus("running");
-    setFinderLog("");
-    setMessage("Browser worker started — see log below.");
-  }
-
   async function onFinderSubmit(e: FormEvent) {
     e.preventDefault();
     if (!finderForm.request.trim()) return;
-    await withBusy("Staging workspace", async () => {
+    await withBusy("Launching finder", async () => {
       const title = finderForm.title || finderForm.request.slice(0, 60) + (finderForm.request.length > 60 ? "…" : "");
-      await api.createJob({
+      const job = await api.createJob({
         kind: "finder" as JobKind,
-        title, family: "report-finder",
+        title,
+        family: "vision-alpha-finder",
         objective: finderForm.request,
-        output_format: finderForm.outputFormat, project_id: finderForm.projectId || null,
-        source_paths: finderForm.downloadPaths,
-        custom_instructions: `Site: ${finderForm.sourceSite}`,
-        question_prompts: []
+        output_format: "pdf",
+        provider_names: ["alpha_vantage"],
+        source_paths: [],
+        urls: [],
+        custom_instructions: [
+          "Site: VisionAlpha",
+          "Use Playwright with the local Codex runtime.",
+          "Load the visionalpha-to-pdf extension, search for the requested reports, capture them as PDFs, and move the final PDFs into result/.",
+        ].join("\n"),
+        question_prompts: [],
       });
-      setMessage("Finder workspace staged.");
+      const jobId = (job as JobRecord).id;
+      setSelectedFinderJobId(jobId);
+      await api.launchJob(jobId, executor);
+      await refreshSession(jobId);
+      await refreshArtifacts(jobId);
+      setFinderForm((current) => ({ ...current, title: "", request: "" }));
+      setMessage("Finder launched in Codex.");
+      await refreshState();
+    });
+  }
+
+  async function runAutomationDefinition(definitionId: string) {
+    await withBusy("Running automation", async () => {
+      const job = await api.runUpdateDefinition(definitionId);
+      const jobId = (job as JobRecord).id;
+      setSelectedAutomationId(definitionId);
+      await api.launchJob(jobId, executor);
+      await refreshSession(jobId);
+      await refreshArtifacts(jobId);
       await refreshState();
     });
   }
@@ -792,6 +916,12 @@ function App() {
     if (job?.kind === "research") {
       setMonitorTab("assistant");
       setResearchScreen("job-running");
+    }
+    if (job?.kind === "finder") {
+      setSelectedFinderJobId(id);
+    }
+    if (job?.kind === "update" && job.update_definition_id) {
+      setSelectedAutomationId(job.update_definition_id);
     }
     await withBusy("Launching Codex", async () => {
       await api.launchJob(id, executor);
@@ -1152,7 +1282,7 @@ function App() {
           </div>
         </div>
 
-        <div className="detail-body">
+        <div className={`detail-body automation-detail${selectedAutomation ? " has-sidebar" : ""}`}>
           <div className="detail-main">
 
             {/* Chat + upload zone + templates — chatbar at vertical center */}
@@ -1196,7 +1326,7 @@ function App() {
                         className={`chat-pill-btn${(valuationRequired || Object.values(enabledConnectors).some(Boolean)) ? " is-active" : ""}`}
                         onClick={() => { setShowConnectors(v => !v); setShowFormatPicker(false); }}>
                         <Plug size={13} strokeWidth={2} />
-                        <span>Connectors</span>
+                        <span>Data</span>
                         <ChevronDown size={10} />
                       </button>
                     {showConnectors && (
@@ -1215,14 +1345,15 @@ function App() {
                                 Valuation adds `valuation.xlsx` alongside the main report.
                               </div>
                             )}
-                            {(["bloomberg", "refinitiv", "factset", "alpha_vantage"] as const).map(key => (
-                              <button key={key} type="button"
-                                className={`conn-toggle-switch${enabledConnectors[key] ? " on" : ""}`}
-                                onClick={() => setEnabledConnectors(c => ({ ...c, [key]: !c[key] }))}>
-                                <span>{key === "alpha_vantage" ? "Alpha Vantage" : key.charAt(0).toUpperCase() + key.slice(1)}</span>
-                                <span className="conn-toggle-knob" />
-                              </button>
-                            ))}
+                            <button type="button"
+                              className={`conn-toggle-switch${enabledConnectors.alpha_vantage ? " on" : ""}`}
+                              onClick={() => setEnabledConnectors((current) => ({ ...current, alpha_vantage: !current.alpha_vantage }))}>
+                              <span>Alpha Vantage</span>
+                              <span className="conn-toggle-knob" />
+                            </button>
+                            <div className="conn-helper-copy">
+                              All market-data runs now use Alpha Vantage only.
+                            </div>
                           </div>
                           <div className="conn-group conn-group-files">
                             <button type="button" className="conn-file-btn" onClick={async () => {
@@ -1533,6 +1664,370 @@ function App() {
     );
   }
 
+  function renderAutomationTab() {
+    const latestOutputPath = firstOutputPath(selectedAutomationRun ? jobArtifacts[selectedAutomationRun.id] : undefined);
+
+    return (
+      <div className="project-detail-view automation-research-view">
+        <div className="detail-breadcrumb">
+          <h2 className="breadcrumb-current">Automation</h2>
+          <div className="breadcrumb-actions">
+            <button className="btn btn-primary btn-sm" onClick={() => setShowNewAutomation((current) => !current)}>
+              <span>+</span> {showNewAutomation ? "Hide composer" : "New automation"}
+            </button>
+          </div>
+        </div>
+
+        <div className="detail-body">
+          <div className="detail-main">
+            {showNewAutomation && (
+              <div className="chat-stage automation-compose">
+                <div className="chat-stage-above" aria-hidden />
+                <div className="chat-stage-center">
+                  <form className="chat-area" onSubmit={onUpdateSubmit}>
+                    <textarea
+                      className="chat-textarea"
+                      rows={3}
+                      placeholder={`Describe the ${selectedAutomationAssetClass.label.toLowerCase()} automation brief, report angle, and what Codex should watch for each run…`}
+                      value={updateForm.prompt}
+                      onChange={(e) => setUpdateForm((current) => ({ ...current, prompt: e.target.value }))}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                          e.preventDefault();
+                          (e.currentTarget.form as HTMLFormElement)?.requestSubmit();
+                        }
+                      }}
+                    />
+                    <div className="chat-actions">
+                      <div className="chat-actions-left">
+                        <button type="button" className="chat-pill-btn is-active">
+                          <Plug size={13} strokeWidth={2} />
+                          <span>Alpha Vantage</span>
+                        </button>
+                        <button type="button" className={`chat-pill-btn${valuationRequired ? " is-active" : ""}`} onClick={() => setValuationRequired((current) => !current)}>
+                          <Calculator size={13} strokeWidth={2} />
+                          <span>{valuationRequired ? "Valuation on" : "Valuation off"}</span>
+                        </button>
+                      </div>
+                      <button className="btn btn-primary btn-sm" type="submit" disabled={!!busy || !updateForm.prompt.trim()}>
+                        {busy ? "Saving…" : "Save automation"}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+                <div className="chat-stage-below automation-stage-below">
+                  <div className="automation-settings-grid">
+                    <label className="automation-field">
+                      <span className="automation-field-label">
+                        <FileText size={14} />
+                        <span>Name</span>
+                      </span>
+                      <input
+                        value={updateForm.name}
+                        onChange={(e) => setUpdateForm((current) => ({ ...current, name: e.target.value }))}
+                        placeholder={`${selectedAutomationAssetClass.label} ${updateForm.cadence === "weekly" ? "Weekly" : "Daily"} Research`}
+                      />
+                    </label>
+                    <label className="automation-field">
+                      <span className="automation-field-label">
+                        <Calendar size={14} />
+                        <span>Cadence</span>
+                      </span>
+                      <select value={updateForm.cadence} onChange={(e) => setUpdateForm((current) => ({ ...current, cadence: e.target.value }))}>
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                      </select>
+                    </label>
+                    <label className="automation-field">
+                      <span className="automation-field-label">
+                        <BookOpen size={14} />
+                        <span>Output</span>
+                      </span>
+                      <select value={updateForm.outputFormat} onChange={(e) => setUpdateForm((current) => ({ ...current, outputFormat: e.target.value }))}>
+                        {AUTOMATION_FORMAT_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="automation-field">
+                      <span className="automation-field-label">
+                        <Calendar size={14} />
+                        <span>Time</span>
+                      </span>
+                      <input
+                        type="time"
+                        value={updateForm.timeOfDay}
+                        onChange={(e) => setUpdateForm((current) => ({ ...current, timeOfDay: e.target.value }))}
+                      />
+                    </label>
+                    {updateForm.cadence === "weekly" && (
+                      <label className="automation-field">
+                        <span className="automation-field-label">
+                          <Calendar size={14} />
+                          <span>Day</span>
+                        </span>
+                        <select value={updateForm.weekday} onChange={(e) => setUpdateForm((current) => ({ ...current, weekday: e.target.value }))}>
+                          <option value="monday">Monday</option>
+                          <option value="tuesday">Tuesday</option>
+                          <option value="wednesday">Wednesday</option>
+                          <option value="thursday">Thursday</option>
+                          <option value="friday">Friday</option>
+                          <option value="saturday">Saturday</option>
+                          <option value="sunday">Sunday</option>
+                        </select>
+                      </label>
+                    )}
+                  </div>
+                  <div>
+                    <div className="section-label">Choose an asset class</div>
+                    <div className="template-scroll">
+                      {AUTOMATION_ASSET_CLASSES.map((assetClass) => {
+                        const AssetIcon = assetClass.icon;
+                        return (
+                          <button
+                            key={assetClass.id}
+                            type="button"
+                            className={`tpl-prev-card ${updateForm.assetClassId === assetClass.id ? "is-selected" : ""}`}
+                            onClick={() => setUpdateForm((current) => ({ ...current, assetClassId: assetClass.id }))}
+                          >
+                            <div className="tpl-prev-doc automation-asset-doc">
+                              <div className="tpl-prev-top">
+                                <AssetIcon size={20} strokeWidth={1.6} className="tpl-prev-icon" />
+                              </div>
+                              <div className="tpl-prev-lines">
+                                <div className="tpl-prev-line l1" />
+                                <div className="tpl-prev-line l2" />
+                                <div className="tpl-prev-line l3" />
+                                <div className="tpl-prev-line l4" />
+                              </div>
+                            </div>
+                            <div className="tpl-prev-label">{assetClass.label}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="project-jobs automation-runs-panel">
+              <div className="section-label">Saved automations</div>
+              {automationDefinitions.length === 0 ? (
+                <div className="automation-empty">
+                  <p>No automations yet.</p>
+                  <p className="automation-empty-hint">Create one above and Codex will catch up missed daily or weekly runs when the app opens.</p>
+                </div>
+              ) : (
+                <div className="project-job-list">
+                  {automationDefinitions.map((definition) => {
+                    const latestRun = automationJobs.find((job) => job.update_definition_id === definition.id) || null;
+                    return (
+                      <div
+                        key={definition.id}
+                        className={`pjob-row ${selectedAutomationId === definition.id ? "is-active" : ""}`}
+                        onClick={() => setSelectedAutomationId(definition.id)}
+                      >
+                        <div className="pjob-info">
+                          <strong>{definition.name}</strong>
+                          <span className="pjob-meta">
+                            {definition.asset_class_label || definition.family} · {definition.output_format} · {definition.schedule_label || "Schedule pending"}
+                          </span>
+                          {latestRun && (
+                            <span className="automation-run-summary">
+                              Latest run: {automationRunLabel(latestRun)} · {latestRun.status}
+                            </span>
+                          )}
+                        </div>
+                        <div className="pjob-btns">
+                          <button className="btn btn-teal btn-sm" onClick={(e) => { e.stopPropagation(); runAutomationDefinition(definition.id); }}>
+                            Run now
+                          </button>
+                          {latestRun && (
+                            <button className="btn btn-ghost btn-sm" onClick={(e) => {
+                              e.stopPropagation();
+                              window.desktop?.openPath?.(latestRun.result_path);
+                            }}>
+                              Results
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {selectedAutomation && (
+            <div className="jv-side">
+              <div className="jv-panel jv-panel-grow">
+                <div className="jv-panel-head">
+                  <span>{selectedAutomation.name}</span>
+                </div>
+                <div className="jv-panel-body">
+                  <div className="automation-summary-grid">
+                    <div>
+                      <strong>Asset class</strong>
+                      <p>{selectedAutomation.asset_class_label || selectedAutomation.family}</p>
+                    </div>
+                    <div>
+                      <strong>Schedule</strong>
+                      <p>{selectedAutomation.schedule_label || "Not set"}</p>
+                    </div>
+                    <div>
+                      <strong>Output</strong>
+                      <p>{selectedAutomation.output_format.toUpperCase()}</p>
+                    </div>
+                    <div>
+                      <strong>Provider</strong>
+                      <p>Alpha Vantage</p>
+                    </div>
+                  </div>
+                  {selectedAutomation.prompt && (
+                    <div className="automation-brief">
+                      <strong>Brief</strong>
+                      <p>{selectedAutomation.prompt}</p>
+                    </div>
+                  )}
+                  <div className="jv-output-actions">
+                    <button className="btn btn-primary btn-sm" onClick={() => runAutomationDefinition(selectedAutomation.id)}>
+                      Run now
+                    </button>
+                    {latestOutputPath && (
+                      <button className="btn btn-ghost btn-sm" onClick={() => window.desktop?.openPath?.(latestOutputPath)}>
+                        Open latest file
+                      </button>
+                    )}
+                  </div>
+                  {selectedAutomationRun
+                    ? renderOutputs(selectedAutomationRun.id, selectedAutomationRun.status === "agent_running" ? "Waiting for this run’s deliverables…" : "No deliverables yet for the latest run.")
+                    : <div className="session-empty">No runs yet for this automation.</div>}
+                </div>
+              </div>
+
+              <div className="jv-panel">
+                <div className="jv-panel-head">
+                  <span>Recent runs</span>
+                  <span className="jv-panel-count">{selectedAutomationRuns.length}</span>
+                </div>
+                <div className="jv-panel-body">
+                  {selectedAutomationRuns.length === 0 ? (
+                    <div className="session-empty">Runs will appear here after the first launch or catch-up pass.</div>
+                  ) : (
+                    <div className="automation-run-list">
+                      {selectedAutomationRuns.map((run) => (
+                        <button
+                          key={run.id}
+                          className={`monitor-output-card ${selectedAutomationRun?.id === run.id ? "is-active" : ""}`}
+                          onClick={() => {
+                            setSelectedAutomationId(run.update_definition_id || selectedAutomation.id);
+                            setSelectedJobId(run.id);
+                          }}
+                        >
+                          <div className="monitor-output-card-top">
+                            <strong>{run.title}</strong>
+                            <span>{run.status}</span>
+                          </div>
+                          <p>{automationRunLabel(run)}</p>
+                          <div className="monitor-output-card-meta">
+                            <span>{run.output_format.toUpperCase()}</span>
+                            <span>{formatTimestamp(run.updated_at)}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {activeAutomationLog && (
+                    <div className="automation-log-wrap">
+                      <div className="dj-label-row">
+                        <span className="dj-label">Live output</span>
+                      </div>
+                      <pre className="job-log automation-log">{activeAutomationLog}</pre>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  function renderFinderTab() {
+    const finderOutputs = selectedFinderJob ? jobArtifacts[selectedFinderJob.id] || [] : [];
+    const finderLogText = [
+      selectedFinderSession?.agentText?.trim() || "",
+      selectedFinderSession?.commandOutput?.trim() ? `$ command output\n${selectedFinderSession.commandOutput.trim()}` : "",
+    ].filter(Boolean).join("\n\n");
+    const finderStatus = selectedFinderJob?.status || selectedFinderSession?.codexStatus || "";
+
+    return (
+      <div className="finder-view">
+        <div className="chat-stage finder-chat-stage">
+          <form className="chat-area finder-chat-area finder-minimal" onSubmit={onFinderSubmit}>
+            <textarea
+              className="chat-textarea"
+              rows={3}
+              placeholder="What do you want to find on visionalpha?"
+              value={finderForm.request}
+              onChange={(e) => setFinderForm((current) => ({ ...current, request: e.target.value }))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  (e.currentTarget.form as HTMLFormElement)?.requestSubmit();
+                }
+              }}
+            />
+            <div className="chat-actions finder-actions-minimal">
+              <button
+                type="submit"
+                className="finder-arrow-btn"
+                disabled={!!busy || !finderForm.request.trim()}
+                title="Run browser worker"
+              >
+                →
+              </button>
+            </div>
+          </form>
+          {(finderLogText || finderOutputs.length > 0 || selectedFinderJob) && (
+            <div className="finder-log-inline">
+              <div className="dj-label-row">
+                <span className="dj-label">Codex finder</span>
+                {finderStatus && <span className="dj-label">{finderStatus}</span>}
+              </div>
+              {finderLogText ? (
+                <pre className="job-log">{finderLogText}</pre>
+              ) : (
+                <div className="session-empty">Finder is ready. Launch a run to stream progress here.</div>
+              )}
+              {selectedFinderJob && (
+                <div className="finder-btn-row">
+                  <button className="btn btn-teal btn-sm" onClick={() => launchJob(selectedFinderJob.id)}>
+                    {selectedFinderSession?.running ? "Relaunch" : "Launch"}
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => window.desktop?.openPath?.(selectedFinderJob.result_path)}>
+                    Results
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => window.desktop?.openPath?.(selectedFinderJob.workspace_path)}>
+                    Workspace
+                  </button>
+                </div>
+              )}
+              {selectedFinderJob && finderOutputs.length > 0 && (
+                <div className="finder-log-wrap">
+                  {renderOutputs(selectedFinderJob.id, "No captured reports yet.")}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // ──────────────────────────────────────────────────────────
   // Main render
   // ──────────────────────────────────────────────────────────
@@ -1587,207 +2082,9 @@ function App() {
               : renderProjectDetail()
           )}
 
-          {tab === "automation" && (
-          <div className="automation-view">
-            <div className="automation-header">
-              <h2>Automation</h2>
-              <button className="btn btn-primary" onClick={() => setShowNewAutomation(true)}>
-                <span>+</span> New automation
-              </button>
-            </div>
+          {tab === "automation" && renderAutomationTab()}
 
-            <div className={`automation-body${selectedAutomation ? " has-output" : ""}`}>
-              <div className="automation-list-section">
-                <div className="section-label">Running automations</div>
-                <div className="automation-cards">
-                  {automationJobs.map((j) => (
-                    <div
-                      key={j.id}
-                      className={`automation-card ${selectedAutomationId === j.id ? "is-active" : ""}`}
-                      onClick={() => setSelectedAutomationId(j.id)}
-                    >
-                      <div className="automation-card-header">
-                        <span className="automation-card-title">{j.title}</span>
-                        <span className="automation-status">{j.status}</span>
-                      </div>
-                      <div className="automation-card-meta">
-                        {j.family} · {j.output_format}
-                      </div>
-                      <div className="automation-card-actions">
-                        <button className="btn btn-teal btn-sm"
-                          onClick={(e) => { e.stopPropagation(); launchJob(j.id); }}>
-                          {j.status === "agent_running" ? "Relaunch" : "Run"}
-                        </button>
-                        <button className="btn btn-ghost btn-sm"
-                          onClick={(e) => { e.stopPropagation(); window.desktop?.openPath?.(j.result_path); }}>
-                          Results
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  {automationJobs.length === 0 && (
-                    <div className="automation-empty">
-                      <p>No automations running yet.</p>
-                      <p className="automation-empty-hint">Create one with the + button above.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {selectedAutomation && (
-                <div className="automation-output-panel">
-                  <div className="automation-output-header">
-                    <strong>{selectedAutomation.title}</strong>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setSelectedAutomationId(null)}><X size={14} strokeWidth={2.5} /></button>
-                  </div>
-                  <div className="automation-output-meta">
-                    {selectedAutomation.family} · {selectedAutomation.output_format} · {selectedAutomation.status}
-                  </div>
-                  <div className="automation-output-actions">
-                    <button className="btn btn-teal btn-sm" onClick={() => launchJob(selectedAutomation.id)}>
-                      {selectedAutomation.status === "agent_running" ? "Relaunch" : "Launch"}
-                    </button>
-                    <button className="btn btn-ghost btn-sm"
-                      onClick={() => window.desktop?.openPath?.(selectedAutomation.result_path)}>
-                      Open results
-                    </button>
-                  </div>
-                  {activeAutomationLog && (
-                    <div className="automation-log-wrap">
-                      <div className="dj-label-row">
-                        <span className="dj-label">Live output</span>
-                      </div>
-                      <pre className="job-log automation-log">{activeAutomationLog}</pre>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {showNewAutomation && (
-              <div className="modal-overlay modal-overlay-clear" onClick={(e) => { if (e.target === e.currentTarget) setShowNewAutomation(false); }}>
-                <form className="new-automation-modal" onSubmit={onUpdateSubmit}>
-                  <div className="modal-heading">
-                    <h3>New automation</h3>
-                    <button type="button" className="modal-close" onClick={() => setShowNewAutomation(false)}><X size={16} strokeWidth={2.5} /></button>
-                  </div>
-                  <div className="automation-form-grid">
-                    <label className="automation-field">
-                      <span className="automation-field-label">
-                        <FileText size={14} />
-                        <span>Name</span>
-                      </span>
-                      <input value={updateForm.name}
-                        onChange={(e) => setUpdateForm((c) => ({ ...c, name: e.target.value }))} required
-                        placeholder="e.g. Daily Macro Recap" />
-                    </label>
-                    <label className="automation-field">
-                      <span className="automation-field-label">
-                        <Calendar size={14} />
-                        <span>Cadence</span>
-                      </span>
-                      <select value={updateForm.cadence}
-                        onChange={(e) => setUpdateForm((c) => ({ ...c, cadence: e.target.value }))}>
-                        <option value="daily">Daily</option>
-                        <option value="weekly">Weekly</option>
-                        <option value="adhoc">Ad hoc</option>
-                      </select>
-                    </label>
-                    <label className="automation-field">
-                      <span className="automation-field-label">
-                        <BookOpen size={14} />
-                        <span>Output</span>
-                      </span>
-                      <select value={updateForm.outputFormat}
-                        onChange={(e) => setUpdateForm((c) => ({ ...c, outputFormat: e.target.value }))}>
-                        <option value="pdf">PDF</option>
-                        <option value="pptx">PPTX</option>
-                        <option value="docx">DOCX</option>
-                      </select>
-                    </label>
-                    <label className="automation-field automation-field-full">
-                      <span className="automation-field-label">
-                        <BarChart3 size={14} />
-                        <span>Report type</span>
-                      </span>
-                      <select value={updateForm.family}
-                        onChange={(e) => setUpdateForm((c) => ({ ...c, family: e.target.value }))}>
-                        {FAMILIES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
-                      </select>
-                    </label>
-                    <label className="automation-field automation-field-full">
-                      <span className="automation-field-label">
-                        <TrendingUp size={14} />
-                        <span>Instruments</span>
-                      </span>
-                      <textarea rows={2} value={updateForm.instruments}
-                        onChange={(e) => setUpdateForm((c) => ({ ...c, instruments: e.target.value }))}
-                        placeholder="EURUSD, XAUUSD, Brent, SPY" />
-                    </label>
-                    <label className="automation-field automation-field-full">
-                      <span className="automation-field-label">
-                        <Plug size={14} />
-                        <span>Connectors</span>
-                      </span>
-                      <input value={updateForm.connectors}
-                        onChange={(e) => setUpdateForm((c) => ({ ...c, connectors: e.target.value }))}
-                        placeholder="premium-primary, bloomberg (comma-separated)" />
-                    </label>
-                  </div>
-                  <div className="modal-actions">
-                    <button type="button" className="btn btn-ghost" onClick={() => setShowNewAutomation(false)}>Cancel</button>
-                    <button type="submit" className="btn btn-primary" disabled={!!busy}>Create automation</button>
-                  </div>
-                </form>
-              </div>
-            )}
-          </div>
-          )}
-
-          {tab === "finder" && (
-          <div className="finder-view">
-            <div className="chat-stage finder-chat-stage">
-              <form className="chat-area finder-chat-area finder-minimal" onSubmit={async (e) => {
-                e.preventDefault();
-                if (!finderForm.request.trim()) return;
-                await withBusy("Launching browser", runFinderRecipe);
-              }}>
-                <textarea
-                  className="chat-textarea"
-                  rows={3}
-                  placeholder="What do you want to find on visionalpha?"
-                  value={finderForm.request}
-                  onChange={(e) => setFinderForm((c) => ({ ...c, request: e.target.value }))}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                      e.preventDefault();
-                      (e.currentTarget.form as HTMLFormElement)?.requestSubmit();
-                    }
-                  }}
-                />
-                <div className="chat-actions finder-actions-minimal">
-                  <button
-                    type="submit"
-                    className="finder-arrow-btn"
-                    disabled={!!busy || !finderForm.request.trim()}
-                    title="Run browser worker"
-                  >
-                    →
-                  </button>
-                </div>
-              </form>
-              {finderLog && (
-                <div className="finder-log-inline">
-                  <div className="dj-label-row">
-                    <span className="dj-label">Browser worker</span>
-                    {finderStatus !== "running" && <span className="dj-label" style={{ color: finderStatus === "done" ? "var(--success)" : "var(--danger)" }}>{finderStatus}</span>}
-                  </div>
-                  <pre className="job-log">{finderLog}</pre>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+          {tab === "finder" && renderFinderTab()}
 
         </div>
       </main>

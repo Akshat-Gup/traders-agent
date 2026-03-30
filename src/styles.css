@@ -2902,3 +2902,20 @@ select {
     border-bottom: 1px solid var(--border-soft);
   }
 }
+
+.automation-research-view .detail-body {
+  grid-template-columns: 1fr;
+  max-width: none;
+  margin: 0;
+  width: 100%;
+}
+
+.automation-research-view .detail-body.has-sidebar {
+  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.7fr);
+}
+
+@media (max-width: 1180px) {
+  .automation-research-view .detail-body.has-sidebar {
+    grid-template-columns: 1fr;
+  }
+}

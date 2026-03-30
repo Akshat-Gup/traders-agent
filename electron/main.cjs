@@ -17,6 +17,15 @@ let accountSnapshot = {
   authMode: null,
 };
 
+function applyRuntimeSettings() {
+  const settings = localState.readSettings();
+  const alphaKey = String(settings.alpha_vantage_api_key || "").trim();
+  process.env.ALPHAVANTAGE_API_KEY = alphaKey;
+  process.env.ALPHA_VANTAGE_API_KEY = alphaKey;
+  process.env.TRADERS_MARKET_DATA_PROVIDER = localState.ALPHA_VANTAGE_PROVIDER;
+  return settings;
+}
+
 function codexInstalled() {
   const probe = spawnSync("codex", ["--version"], { encoding: "utf8" });
   return probe.status === 0;
@@ -184,7 +193,12 @@ function buildRunInstruction(job) {
     "Keep the conversation updated with concise progress notes while you work.",
   ];
   if (job.kind === "update") {
-    parts.push("Use web research when needed to make the update current.");
+    parts.push("Use web search for the requested time window and keep dates explicit.");
+    parts.push("Spawn subagents for parallel source gathering and synthesis when it will help.");
+  }
+  if (job.kind === "finder") {
+    parts.push("Use Playwright/browser automation for VisionAlpha and the bundled visionalpha-to-pdf extension when needed.");
+    parts.push("Keep downloaded reports in `result/` after capture.");
   }
   return parts.join(" ");
 }
@@ -217,6 +231,7 @@ async function ensureCodexReady() {
   if (!codexInstalled()) {
     throw new Error("Codex CLI is not installed on this machine.");
   }
+  applyRuntimeSettings();
   await codexClient.start();
   return syncAccount();
 }
@@ -339,6 +354,25 @@ async function launchJob(jobId) {
     threadId,
     turnId: turn.turn.id,
   };
+}
+
+async function autoLaunchDueJobs(jobs) {
+  if (!jobs.length) return;
+  for (const job of jobs) {
+    launchJob(job.id).catch((error) => {
+      updateSession(
+        job.id,
+        (session) => {
+          session.running = false;
+          session.codexStatus = "failed";
+          session.lastError = error instanceof Error ? error.message : String(error);
+        },
+        {
+          status: "error",
+        }
+      );
+    });
+  }
 }
 
 async function respondToServerRequest(requestId, decision) {
@@ -557,6 +591,7 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   app.setName("Traders");
+  applyRuntimeSettings();
   if (process.platform === "darwin" && fs.existsSync(ICON_PATH)) {
     try {
       app.dock.setIcon(ICON_PATH);
@@ -591,7 +626,13 @@ app.whenReady().then(async () => {
     focused?.focus();
   });
 
-  ipcMain.handle("state:get", async () => localState.getState({ executorAvailable: codexInstalled() }));
+  ipcMain.handle("state:get", async () => {
+    const dueJobs = localState.catchUpUpdateDefinitions();
+    if (dueJobs.length) {
+      autoLaunchDueJobs(dueJobs).catch(() => {});
+    }
+    return localState.getState({ executorAvailable: codexInstalled() });
+  });
   ipcMain.handle("project:create", async (_, payload) => localState.createProject(payload));
   ipcMain.handle("job:create", async (_, payload) => localState.createJob(payload));
   ipcMain.handle("job:appendQa", async (_, { jobId, content }) => localState.appendJobQa(jobId, content));
@@ -599,7 +640,11 @@ app.whenReady().then(async () => {
   ipcMain.handle("updateDefinition:create", async (_, payload) => localState.createUpdateDefinition(payload));
   ipcMain.handle("updateDefinition:run", async (_, definitionId) => localState.runUpdateDefinition(definitionId));
   ipcMain.handle("settings:get", async () => localState.readSettings());
-  ipcMain.handle("settings:save", async (_, patch) => localState.writeSettings(patch));
+  ipcMain.handle("settings:save", async (_, patch) => {
+    const settings = localState.writeSettings(patch);
+    applyRuntimeSettings();
+    return settings;
+  });
 
   ipcMain.handle("codex:getAccount", async () => ensureCodexReady());
   ipcMain.handle("codex:login", async () => loginWithCodex());
@@ -609,6 +654,11 @@ app.whenReady().then(async () => {
   ipcMain.handle("codex:respondToApproval", async (_, payload) => respondToServerRequest(payload.requestId, payload.decision));
 
   createWindow();
+
+  const dueJobs = localState.catchUpUpdateDefinitions();
+  if (dueJobs.length) {
+    autoLaunchDueJobs(dueJobs).catch(() => {});
+  }
 
   ensureCodexReady().catch(() => {
     // The UI can surface install/login issues when it requests account state.

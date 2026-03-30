@@ -12,6 +12,19 @@ const PROJECT_DIR = path.join(DATA_ROOT, "projects");
 const JOB_DIR = path.join(DATA_ROOT, "jobs");
 const UPDATE_DIR = path.join(DATA_ROOT, "updates");
 const FINDER_NOTES_PATH = path.join(ROOT, "notes", "report-finder-recipes.md");
+const FINDER_EXTENSION_PATH = path.join(ROOT, "visionalpha-to-pdf");
+const FINDER_PROFILE_DIR = path.join(DATA_ROOT, "finder-browser-profile");
+const ALPHA_VANTAGE_PROVIDER = "alpha_vantage";
+const DEFAULT_AUTOMATION_TIME = "08:00";
+const WEEKDAY_INDEX = {
+  sunday: 0,
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+};
 const BUILTIN_TEMPLATES = [
   {
     id: "tmpl_builtin_equity_full",
@@ -31,6 +44,8 @@ function defaultSettings() {
     sandbox: "danger-full-access",
     personality: "friendly",
     web_search: "live",
+    market_data_provider: ALPHA_VANTAGE_PROVIDER,
+    alpha_vantage_api_key: "",
   };
 }
 
@@ -114,6 +129,7 @@ function writeSettings(patch) {
   const settings = {
     ...readSettings(),
     ...(patch || {}),
+    market_data_provider: ALPHA_VANTAGE_PROVIDER,
   };
   writeJsonFile(SETTINGS_FILE, settings);
   return settings;
@@ -190,6 +206,103 @@ function findRecord(items, recordId) {
   return items.find((item) => item.id === recordId) || null;
 }
 
+function parseTimeOfDay(value) {
+  const normalized = String(value || DEFAULT_AUTOMATION_TIME).trim();
+  const match = normalized.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return { hours: 8, minutes: 0 };
+  const hours = Math.min(Math.max(Number(match[1]), 0), 23);
+  const minutes = Math.min(Math.max(Number(match[2]), 0), 59);
+  return { hours, minutes };
+}
+
+function applyTime(dateValue, timeOfDay) {
+  const date = new Date(dateValue);
+  const { hours, minutes } = parseTimeOfDay(timeOfDay);
+  date.setHours(hours, minutes, 0, 0);
+  return date;
+}
+
+function addDays(dateValue, days) {
+  const date = new Date(dateValue);
+  date.setDate(date.getDate() + days);
+  return date;
+}
+
+function normalizeWeekday(value) {
+  const normalized = String(value || "monday").trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(WEEKDAY_INDEX, normalized) ? normalized : "monday";
+}
+
+function weekdayLabel(value) {
+  const normalized = normalizeWeekday(value);
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function formatSchedule(definition) {
+  const cadence = definition.cadence === "weekly" ? "Weekly" : "Daily";
+  const time = definition.time_of_day || DEFAULT_AUTOMATION_TIME;
+  if (definition.cadence === "weekly") {
+    return `${cadence} · ${weekdayLabel(definition.weekday)} · ${time}`;
+  }
+  return `${cadence} · ${time}`;
+}
+
+function formatPeriod(dateValue) {
+  return new Date(dateValue).toISOString().replace(".000Z", "Z");
+}
+
+function previousScheduledOccurrence(definition, occurrence) {
+  if (definition.cadence === "weekly") {
+    return addDays(occurrence, -7);
+  }
+  return addDays(occurrence, -1);
+}
+
+function firstScheduledOccurrence(definition) {
+  const createdAt = new Date(definition.created_at);
+  if (definition.cadence === "weekly") {
+    const targetWeekday = WEEKDAY_INDEX[normalizeWeekday(definition.weekday)];
+    const candidate = applyTime(createdAt, definition.time_of_day);
+    const delta = (targetWeekday - candidate.getDay() + 7) % 7;
+    candidate.setDate(candidate.getDate() + delta);
+    if (candidate < createdAt) {
+      candidate.setDate(candidate.getDate() + 7);
+    }
+    return candidate;
+  }
+  const candidate = applyTime(createdAt, definition.time_of_day);
+  if (candidate < createdAt) {
+    candidate.setDate(candidate.getDate() + 1);
+  }
+  return candidate;
+}
+
+function nextScheduledOccurrence(definition, occurrence) {
+  if (definition.cadence === "weekly") {
+    return addDays(occurrence, 7);
+  }
+  return addDays(occurrence, 1);
+}
+
+function getDueAutomationOccurrences(definition, now = new Date()) {
+  if (!["daily", "weekly"].includes(definition.cadence)) {
+    return [];
+  }
+
+  const due = [];
+  let occurrence = firstScheduledOccurrence(definition);
+  const lastScheduledFor = definition.last_scheduled_for ? new Date(definition.last_scheduled_for) : null;
+
+  while (occurrence <= now) {
+    if (!lastScheduledFor || occurrence > lastScheduledFor) {
+      due.push(new Date(occurrence));
+    }
+    occurrence = nextScheduledOccurrence(definition, occurrence);
+  }
+
+  return due;
+}
+
 function ensureWorkspaceDirs(workspaceRoot) {
   const dirs = {
     source_uploads: path.join(workspaceRoot, "source", "uploads"),
@@ -217,6 +330,7 @@ function copyAny(sourcePath, destinationPath) {
 }
 
 function buildPrompt(job) {
+  const settings = readSettings();
   const templateNote = job.template_id
     ? `Selected template card: ${job.template_id}. Follow its style and output expectations.`
     : "No template card selected. Choose the clearest structure for the requested deliverable.";
@@ -226,13 +340,38 @@ function buildPrompt(job) {
   const urlNote = job.urls.length
     ? "URLs to review are listed in source/urls/urls.txt."
     : "No seed URLs were provided.";
-  const connectors = job.enabled_connectors?.length
-    ? `Requested connectors: ${job.enabled_connectors.join(", ")}. Use available built-in tools when relevant.`
-    : "No special connectors were requested.";
+  const providerNote = settings.alpha_vantage_api_key
+    ? "Alpha Vantage is the only market-data API configured for this app. The API key is available in the environment as `ALPHAVANTAGE_API_KEY` and `ALPHA_VANTAGE_API_KEY`."
+    : "Alpha Vantage is the only market-data API supported here. If the environment key is unavailable, continue with web research and note any resulting data gaps.";
 
   const questionBlock = job.question_prompts?.length
     ? `Questions to answer in the output:\n${job.question_prompts.map((question) => `- ${question}`).join("\n")}`
     : "No explicit question checklist was provided.";
+
+  const automationWindow = job.period_start && job.period_end
+    ? `Coverage window: use web search specifically for information published between ${formatPeriod(job.period_start)} and ${formatPeriod(job.period_end)}. Use absolute dates throughout.`
+    : null;
+
+  const automationNote = job.kind === "update"
+    ? [
+        job.asset_class_label ? `Asset class: ${job.asset_class_label}` : null,
+        job.schedule_label ? `Automation schedule: ${job.schedule_label}` : null,
+        automationWindow,
+        "Spawn subagents to gather sources, charts, and synthesis in parallel when that will improve speed or coverage.",
+        "Focus the deliverable on a polished research report or investor-ready powerpoint, depending on the selected output format."
+      ].filter(Boolean).join("\n")
+    : null;
+
+  const finderNote = job.kind === "finder"
+    ? [
+        "This is a VisionAlpha finder run.",
+        `Use Playwright/browser automation from this workspace and load the unpacked extension at: ${FINDER_EXTENSION_PATH}`,
+        `Reuse the persistent browser profile at: ${FINDER_PROFILE_DIR}`,
+        "The extension listens for the `visionalpha-pdf-capture` browser event so the capture can run without opening the popup.",
+        "Open VisionAlpha, search for the requested reports, capture them with the extension, and move the final PDF files into `result/`.",
+        "If VisionAlpha requires manual authentication, pause and keep the session reusable in the persistent profile instead of discarding it."
+      ].join("\n")
+    : null;
 
   return [
     `You are preparing a final ${job.family} deliverable in ${job.output_format.toUpperCase()} format.`,
@@ -250,7 +389,9 @@ function buildPrompt(job) {
     templateNote,
     sourceNote,
     urlNote,
-    connectors,
+    providerNote,
+    automationNote,
+    finderNote,
     questionBlock,
     job.custom_instructions
       ? `Additional instructions:\n${job.custom_instructions}`
@@ -333,6 +474,36 @@ function createWorkspace(job) {
     approval_policy: settings.approval_policy,
     sandbox: settings.sandbox,
   });
+  writeJsonFile(path.join(dirs.context, "provider-config.json"), {
+    provider: ALPHA_VANTAGE_PROVIDER,
+    api_key_available: Boolean(settings.alpha_vantage_api_key),
+    environment_variables: ["ALPHAVANTAGE_API_KEY", "ALPHA_VANTAGE_API_KEY"],
+  });
+  if (job.kind === "update") {
+    writeJsonFile(path.join(dirs.context, "automation-config.json"), {
+      asset_class_id: job.asset_class_id || null,
+      asset_class_label: job.asset_class_label || null,
+      cadence: job.cadence || null,
+      schedule_label: job.schedule_label || null,
+      scheduled_for: job.scheduled_for || null,
+      period_start: job.period_start || null,
+      period_end: job.period_end || null,
+      provider: ALPHA_VANTAGE_PROVIDER,
+    });
+  }
+  if (job.kind === "finder") {
+    ensureDir(FINDER_PROFILE_DIR);
+    writeJsonFile(path.join(dirs.context, "finder-config.json"), {
+      site: "VisionAlpha",
+      extension_path: FINDER_EXTENSION_PATH,
+      browser_profile_dir: FINDER_PROFILE_DIR,
+      result_path: job.result_path,
+      objective: job.objective,
+    });
+    if (fs.existsSync(FINDER_NOTES_PATH)) {
+      fs.copyFileSync(FINDER_NOTES_PATH, path.join(dirs.context, "finder-recipes.md"));
+    }
+  }
   return job;
 }
 
@@ -353,8 +524,7 @@ function createProject(payload) {
   return record;
 }
 
-function createJob(payload) {
-  const state = readState();
+function createJobRecord(state, payload) {
   const template = payload.template_id ? findRecord(state.templates, payload.template_id) : null;
   if (template && template.output_formats.length && !template.output_formats.includes((payload.output_format || "pptx").toLowerCase())) {
     throw new Error(`${template.name} supports ${template.output_formats.join(", ").toUpperCase()} outputs only.`);
@@ -388,6 +558,13 @@ function createJob(payload) {
     last_command_output: "",
     prompt_preview: "",
     question_log: [],
+    update_definition_id: payload.update_definition_id || null,
+    asset_class_id: payload.asset_class_id || null,
+    asset_class_label: payload.asset_class_label || null,
+    schedule_label: payload.schedule_label || null,
+    scheduled_for: payload.scheduled_for || null,
+    period_start: payload.period_start || null,
+    period_end: payload.period_end || null,
     workspace_path: workspaceRoot,
     result_path: path.join(workspaceRoot, "result"),
     created_at: nowIso(),
@@ -395,6 +572,12 @@ function createJob(payload) {
   };
   createWorkspace(record);
   state.jobs.push(record);
+  return record;
+}
+
+function createJob(payload) {
+  const state = readState();
+  const record = createJobRecord(state, payload);
   writeState(state);
   return record;
 }
@@ -417,44 +600,114 @@ function appendJobQa(jobId, content) {
 
 function createUpdateDefinition(payload) {
   const state = readState();
+  const createdAt = nowIso();
+  const normalizedName = payload.name || `${payload.asset_class_label || "Market"} ${payload.cadence === "weekly" ? "Weekly" : "Daily"} Report`;
   const record = {
-    id: entityId("upd", payload.name),
-    name: payload.name,
-    cadence: payload.cadence || "adhoc",
+    id: entityId("upd", normalizedName),
+    name: normalizedName,
+    cadence: payload.cadence || "daily",
     family: payload.family || "macro-update",
+    asset_class_id: payload.asset_class_id || payload.family || "macro",
+    asset_class_label: payload.asset_class_label || payload.name || "Macro",
+    time_of_day: payload.time_of_day || DEFAULT_AUTOMATION_TIME,
+    weekday: normalizeWeekday(payload.weekday || "monday"),
+    schedule_label: "",
     output_format: payload.output_format || "pdf",
-    instruments: payload.instruments || [],
-    template_id: payload.template_id || null,
-    connectors: payload.connectors || [],
-    created_at: nowIso(),
+    prompt: payload.prompt || "",
+    provider: ALPHA_VANTAGE_PROVIDER,
+    created_at: createdAt,
+    updated_at: createdAt,
+    last_scheduled_for: null,
   };
+  record.schedule_label = formatSchedule(record);
   state.update_definitions.push(record);
   writeState(state);
   return record;
+}
+
+function buildAutomationJobPayload(definition, options = {}) {
+  const scheduledFor = options.scheduledFor ? new Date(options.scheduledFor) : new Date();
+  const periodEnd = new Date(options.periodEnd || scheduledFor);
+  const rawPeriodStart = options.periodStart || previousScheduledOccurrence(definition, periodEnd);
+  const periodStart = new Date(rawPeriodStart);
+  const assetClass = definition.asset_class_label || definition.name;
+  const outputLabel = definition.output_format === "pptx" ? "powerpoint" : "research report";
+  const runDate = periodEnd.toISOString().slice(0, 10);
+
+  return {
+    kind: "update",
+    title: `${definition.name} ${runDate}`,
+    family: definition.family,
+    objective: `Create a ${definition.cadence} ${outputLabel} for ${assetClass}, focused on developments between ${formatPeriod(periodStart)} and ${formatPeriod(periodEnd)}.`,
+    output_format: definition.output_format,
+    provider_names: [ALPHA_VANTAGE_PROVIDER],
+    source_paths: [],
+    urls: [],
+    custom_instructions: [
+      definition.prompt ? `Automation brief:\n${definition.prompt}` : null,
+      `Use web search specifically for developments in the period ${formatPeriod(periodStart)} through ${formatPeriod(periodEnd)}.`,
+      "Cite concrete dates, note material market moves, and exclude stale news outside the requested window unless it materially changes the interpretation.",
+      "Use Alpha Vantage for market data pulls whenever API data is needed, and supplement with web research for narrative context.",
+    ].filter(Boolean).join("\n\n"),
+    question_prompts: [
+      `What changed in ${assetClass} during the requested period?`,
+      "Which moves matter most for positioning, catalysts, or risk?",
+    ],
+    cadence: definition.cadence,
+    enabled_connectors: [ALPHA_VANTAGE_PROVIDER],
+    update_definition_id: definition.id,
+    asset_class_id: definition.asset_class_id || null,
+    asset_class_label: definition.asset_class_label || null,
+    schedule_label: definition.schedule_label || formatSchedule(definition),
+    scheduled_for: scheduledFor.toISOString(),
+    period_start: periodStart.toISOString(),
+    period_end: periodEnd.toISOString(),
+  };
 }
 
 function runUpdateDefinition(definitionId) {
   const state = readState();
   const definition = findRecord(state.update_definitions, definitionId);
   if (!definition) throw new Error("Update definition not found");
-  return createJob({
-    kind: "update",
-    title: `${definition.name} ${new Date().toISOString().slice(0, 10)}`,
-    family: definition.family,
-    objective: `Create a ${definition.cadence} update covering: ${definition.instruments.join(", ")}. Include annotated charts, actionable analysis, and a polished final output.`,
-    output_format: definition.output_format,
-    template_id: definition.template_id,
-    provider_names: definition.connectors,
-    source_paths: [],
-    urls: [],
-    custom_instructions: "",
-    question_prompts: [
-      "What changed across the tracked instruments?",
-      "Which moves matter most to positioning or risk?",
-    ],
-    cadence: definition.cadence,
-    enabled_connectors: definition.connectors,
-  });
+  const job = createJobRecord(state, buildAutomationJobPayload(definition));
+  definition.updated_at = nowIso();
+  writeState(state);
+  return job;
+}
+
+function catchUpUpdateDefinitions(now = new Date()) {
+  const state = readState();
+  const createdJobs = [];
+
+  for (const definition of state.update_definitions) {
+    if (!["daily", "weekly"].includes(definition.cadence)) continue;
+    definition.schedule_label = formatSchedule(definition);
+    const occurrences = getDueAutomationOccurrences(definition, now);
+
+    for (const occurrence of occurrences) {
+      const periodEnd = new Date(occurrence);
+      const periodStart = previousScheduledOccurrence(definition, occurrence);
+      const job = createJobRecord(state, buildAutomationJobPayload(definition, {
+        scheduledFor: occurrence,
+        periodStart: periodStart < new Date(definition.created_at) ? new Date(definition.created_at) : periodStart,
+        periodEnd,
+      }));
+      createdJobs.push(job);
+      definition.last_scheduled_for = occurrence.toISOString();
+      definition.updated_at = nowIso();
+    }
+  }
+
+  if (createdJobs.length) {
+    writeState(state);
+  } else {
+    const hasScheduleUpdates = state.update_definitions.some((definition) => !definition.schedule_label);
+    if (hasScheduleUpdates) {
+      writeState(state);
+    }
+  }
+
+  return createdJobs;
 }
 
 function updateJob(jobId, patch) {
@@ -473,6 +726,9 @@ function getJob(jobId) {
 module.exports = {
   DATA_ROOT,
   FINDER_NOTES_PATH,
+  FINDER_EXTENSION_PATH,
+  FINDER_PROFILE_DIR,
+  ALPHA_VANTAGE_PROVIDER,
   readSettings,
   writeSettings,
   getState,
@@ -481,6 +737,7 @@ module.exports = {
   appendJobQa,
   createUpdateDefinition,
   runUpdateDefinition,
+  catchUpUpdateDefinitions,
   updateJob,
   getJob,
 };

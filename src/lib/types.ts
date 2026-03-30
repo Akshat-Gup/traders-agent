@@ -23,11 +23,17 @@ export interface UpdateDefinitionRecord {
   name: string;
   cadence: string;
   family: string;
+  asset_class_id?: string | null;
+  asset_class_label?: string | null;
+  time_of_day?: string | null;
+  weekday?: string | null;
+  schedule_label?: string | null;
   output_format: string;
-  instruments: string[];
-  template_id?: string | null;
-  connectors?: string[];
+  prompt?: string;
+  provider?: string;
+  last_scheduled_for?: string | null;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface JobRecord {
@@ -54,6 +60,13 @@ export interface JobRecord {
   cadence?: string | null;
   question_log?: { role: string; content: string; timestamp: string }[];
   source_paths?: string[];
+  update_definition_id?: string | null;
+  asset_class_id?: string | null;
+  asset_class_label?: string | null;
+  schedule_label?: string | null;
+  scheduled_for?: string | null;
+  period_start?: string | null;
+  period_end?: string | null;
 }
 
 export interface IntakeOption {
