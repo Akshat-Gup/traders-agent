@@ -16,5 +16,6 @@ __pycache__/
 *.env.local
 
 # Large sample assets — keep locally, don't push
+examples/extracts/
 examples/reports/
 examples/output/

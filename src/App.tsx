@@ -1211,7 +1211,7 @@ function App() {
                 Project name
                 <input
                   autoFocus
-                  placeholder="e.g. Broadcom Q2 Research"
+                  placeholder="e.g. Semiconductor updates"
                   value={projectForm.name}
                   onChange={(e) => setProjectForm((c) => ({ ...c, name: e.target.value }))}
                   required
